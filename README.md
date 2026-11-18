@@ -20,6 +20,7 @@ AI model will perform best in standardized coding competitions.
 - `apps/web/lib/config` - Environment configuration
 - `apps/web/lib/server/services` - Backend business logic
 - `apps/web/lib/server/integrations` - External API integrations
+- `supabase/` - Database migrations, CLI config, and schema assertion tests
 
 ## Getting Started
 
