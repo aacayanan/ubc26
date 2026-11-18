@@ -46,6 +46,8 @@ are implemented:
 - `NEXT_PUBLIC_SUPABASE_URL` - Public Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` - Public Supabase key
 - `OPENROUTER_API_KEY` - Private server-only API key
+- `SUPABASE_SERVICE_ROLE_KEY` - Private server-only Supabase key that
+  bypasses RLS (Supabase dashboard → Settings → API)
 
 Never commit real API keys or secrets.
 
@@ -82,6 +84,30 @@ Check formatting without changing files.
 npm exec --workspace=web -- tsc --noEmit
 ```
 Check TypeScript without producing compiled files.
+
+```bash
+npm run db:link -- --project-ref <your-project-ref>
+```
+One-time: link the Supabase CLI to a hosted project.
+
+```bash
+npm run db:push
+```
+Apply pending migrations from `supabase/migrations/` (filename order) to the
+linked project.
+
+## Database
+
+The schema lives in `supabase/migrations/` — nine ordered SQL files covering
+users, wallets, model/challenge catalogs, rounds, predictions, evaluation,
+settlement, blockchain transactions, and the RLS policies. They apply cleanly
+in order to a fresh Supabase project via `npm run db:push`.
+
+Assertion scripts in `supabase/tests/` verify the schema acceptance criteria
+(duplicate/invalid-data rejection and RLS behavior). Run each one in the
+hosted Supabase SQL editor: every assertion raises `FAIL: …` on violation,
+a final select confirms success, and everything is rolled back so no data
+persists.
 
 ## Docker
 
@@ -155,3 +181,11 @@ Server configuration uses `server-only` to prevent importing
 private configuration modules into Client Components.
 
 Only intended public variables use the `NEXT_PUBLIC_` prefix.
+
+The Supabase service-role key (`SUPABASE_SERVICE_ROLE_KEY`) bypasses
+row-level security. It must only be read from `lib/server/**` modules
+(guarded by `server-only`), never serialized into API responses, and never
+given a `NEXT_PUBLIC_` prefix. RLS policies in
+`supabase/migrations/20261118100800_rls_policies.sql` protect user-owned
+data at the database level; privileged server workflows (round transitions,
+evaluation, settlement) use the service role.
