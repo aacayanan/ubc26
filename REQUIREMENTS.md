@@ -1,6 +1,6 @@
 # AI Showdown — Requirements & Build Order
 
-Last updated: 2026-11-16. Source: project spec + decisions confirmed with the team.
+Last updated: 2026-11-18. Source: project spec + decisions confirmed with the team.
 
 ## Decisions Log
 
@@ -14,7 +14,8 @@ Last updated: 2026-11-16. Source: project spec + decisions confirmed with the te
 | Rewards | Points / leaderboard only. No tokens, no NFTs, no real money | **Locked** |
 | Auth flow | Login-first via Supabase (email/social). Phantom wallet link optional, only needed for on-chain commitment verification | **Locked** |
 | Solana scope | Deferred — decide between Anchor program / lightweight tx records / full on-chain before Milestone 5 starts | **Gated** |
-| Frontend stack | Next.js (TypeScript) + Tailwind — default, confirm at scaffold time | Proposed |
+| Frontend stack | Next.js (TypeScript) + Tailwind — confirmed at scaffold time | **Locked** |
+| App packaging | Production Dockerfile at repo root (Next.js standalone output); deploy host still open | **Locked** |
 
 ## Non-Negotiable Constraints
 
@@ -30,7 +31,7 @@ Last updated: 2026-11-16. Source: project spec + decisions confirmed with the te
 ## Functional Requirements (build order)
 
 ### M0 — Foundations
-- F1. Monorepo scaffold: Next.js (TS) app, shared types package, ESLint/Prettier, env-based config.
+- F1. Monorepo scaffold: Next.js (TS) app, shared types package, ESLint/Prettier, env-based config. **Done (2026-11-18)** — includes a production Dockerfile (standalone build) and `.dockerignore`.
 - F2. Supabase project + schema migrations: Users, Wallets, LLM Models, Challenges, Competition Rounds, Predictions, Model Executions, Test Results, Competition Results, User Scores, Blockchain Transactions (FKs, constraints, indexes).
 - F3. Structured logging + consistent error-handling convention from the first commit.
 

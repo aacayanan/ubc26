@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **AI Showdown** — a consumer-facing prediction platform where users predict which LLMs (GPT, Claude, Gemini) will win standardized Python coding challenges, judged on accuracy (test cases passed), execution speed, and code length. Built for the UBC 2026 Hackathon, Track 03 (Consumer Applications), on Solana Devnet. Submission deadline: **November 20, 2026, 12:00 PM CST**.
 
-Repo state: greenfield as of 2026-11-16 — no code yet. Detailed requirements and build order live in `REQUIREMENTS.md` (decisions log, milestones M0–M7, open items); follow that ordering when implementing.
+Repo state: monorepo scaffolded as of 2026-11-18 — Next.js app in `apps/web`, shared types in `packages/shared`, lint/format tooling, production Dockerfile (standalone output). Detailed requirements and build order live in `REQUIREMENTS.md` (decisions log, milestones M0–M7, open items); follow that ordering when implementing.
 
 ## Non-negotiable constraints
 

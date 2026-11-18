@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-showdown
+    ports:
+      - "3000:3000"
+    env_file:
+      # Optional: create apps/web/.env.local (see apps/web/.env.example).
+      # Compose skips this file silently if it does not exist.
+      - path: apps/web/.env.local
+        required: false
+    restart: unless-stopped

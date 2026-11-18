@@ -83,6 +83,37 @@ npm exec --workspace=web -- tsc --noEmit
 ```
 Check TypeScript without producing compiled files.
 
+## Docker
+
+A production image is defined in the repo-root `Dockerfile` using
+Next.js standalone output. Build and run it with Compose from the
+repository root:
+
+```bash
+docker compose up --build
+```
+
+Then open http://localhost:3000.
+
+Plain Docker works too:
+
+```bash
+docker build -t ai-showdown .
+docker run --rm -p 3000:3000 ai-showdown
+```
+
+Stop a detached run with `docker compose down`.
+
+Notes:
+
+- `.dockerignore` excludes `node_modules`, build output, and all
+  `.env` files so secrets are never baked into the image.
+- Server-only secrets (e.g. `OPENROUTER_API_KEY`) must be passed at
+  runtime with `docker run --env-file apps/web/.env.local` or
+  `-e` flags — never as `NEXT_PUBLIC_` variables.
+- The sandbox service (F13) will run as a separate container later;
+  this image only packages the web app.
+
 ## Architecture
 
 Server-side business logic is organized into services for
