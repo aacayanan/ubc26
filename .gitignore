@@ -1,0 +1,22 @@
+# Installed dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+coverage/
+
+# TypeScript-generated files
+*.tsbuildinfo
+
+# Private environment configuration
+.env
+.env.*
+
+# Allow example environment files
+!.env.example
+
+# Local operating system files
+.DS_Store
+Thumbs.db
