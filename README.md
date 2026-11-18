@@ -85,34 +85,57 @@ Check TypeScript without producing compiled files.
 
 ## Docker
 
-A production image is defined in the repo-root `Dockerfile` using
-Next.js standalone output. Build and run it with Compose from the
-repository root:
+The app ships as a production Docker image defined in the repo-root
+`Dockerfile`. Requirements: Docker with Compose v2 (on macOS,
+Colima or Docker Desktop both work).
+
+### Quick start
+
+From the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-Then open http://localhost:3000.
+Open http://localhost:3000. To run detached:
 
-Plain Docker works too:
+```bash
+docker compose up --build -d
+docker compose logs -f web   # follow app logs
+docker compose down          # stop and remove the container
+```
+
+### Environment variables
+
+Compose loads `apps/web/.env.local` automatically if the file exists
+(created from `apps/web/.env.example`). If it is missing, the app
+still starts, but integrations that need keys (e.g. OpenRouter)
+will not work.
+
+Secrets are provided at **runtime**, never baked into the image —
+`.dockerignore` excludes every `.env` file from the build context.
+
+### Plain Docker (without Compose)
 
 ```bash
 docker build -t ai-showdown .
-docker run --rm -p 3000:3000 ai-showdown
+docker run --rm -p 3000:3000 --env-file apps/web/.env.local ai-showdown
 ```
 
-Stop a detached run with `docker compose down`.
+### How the image works
 
-Notes:
+- Multi-stage build: `npm ci` → `next build` → slim Alpine runtime.
+- Next.js standalone output keeps the final image small (~300 MB).
+- The container runs as a non-root `nextjs` user on port 3000.
+- The lockfile records native binaries for all platforms, so the
+  build works on macOS, Windows, and Linux machines alike.
 
-- `.dockerignore` excludes `node_modules`, build output, and all
-  `.env` files so secrets are never baked into the image.
-- Server-only secrets (e.g. `OPENROUTER_API_KEY`) must be passed at
-  runtime with `docker run --env-file apps/web/.env.local` or
-  `-e` flags — never as `NEXT_PUBLIC_` variables.
-- The sandbox service (F13) will run as a separate container later;
-  this image only packages the web app.
+### Notes
+
+- The evaluation sandbox (REQUIREMENTS.md F13) will run as a
+  separate container later; this image only packages the web app.
+- Never pass server-only keys (e.g. `OPENROUTER_API_KEY`) as
+  `NEXT_PUBLIC_` variables.
 
 ## Architecture
 
