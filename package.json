@@ -12,9 +12,12 @@
     "lint": "npm run lint --workspace=web",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,css,md}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "typecheck": "npm exec --workspace=web -- next typegen && npm exec --workspace=web -- tsc --noEmit"
+    "typecheck": "npm exec --workspace=web -- next typegen && npm exec --workspace=web -- tsc --noEmit",
+    "db:link": "supabase link",
+    "db:push": "supabase db push"
   },
   "devDependencies": {
-    "prettier": "3.10.1"
+    "prettier": "3.10.1",
+    "supabase": "^2.122.1"
   }
 }

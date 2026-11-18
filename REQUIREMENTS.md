@@ -32,7 +32,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 
 ### M0 — Foundations
 - F1. Monorepo scaffold: Next.js (TS) app, shared types package, ESLint/Prettier, env-based config. **Done (2026-11-18)** — includes a production Dockerfile (standalone build) and `.dockerignore`.
-- F2. Supabase project + schema migrations: Users, Wallets, LLM Models, Challenges, Competition Rounds, Predictions, Model Executions, Test Results, Competition Results, User Scores, Blockchain Transactions (FKs, constraints, indexes).
+- F2. Supabase project + schema migrations: Users, Wallets, LLM Models, Challenges, Competition Rounds, Predictions, Model Executions, Test Results, Competition Results, User Scores, Blockchain Transactions (FKs, constraints, indexes). **Done (2026-11-18)** — 9 ordered migrations in `supabase/migrations/` (FKs, uniqueness/check constraints, indexes, timestamps, RLS policies); assertion scripts in `supabase/tests/` verified against a fresh hosted project; service-role key documented in README and `.env.example`.
 - F3. Structured logging + consistent error-handling convention from the first commit.
 
 ### M1 — Accounts & Shell
