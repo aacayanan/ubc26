@@ -216,6 +216,21 @@ categories).
 ### M6 — Leaderboards & History (Priority 1)
 
 - F24. User leaderboard (points, streaks, prediction hit rate).
+  **Partial (2026-11-19)** — `/leaderboard` + `GET /api/leaderboard` rank
+  accounts with a positive `user_scores.total_points` balance (decided
+  2026-11-19: the same balance the profile shows, written server-side only);
+  "Rounds" counts distinct `SETTLED`/`ARCHIVED` rounds in `score_events`.
+  Ties share a rank (1, 1, 3) and are ordered by a stable hash; names that
+  look like an email or wallet address are replaced by a stable pseudonym,
+  and user ids never reach the client. **Waiting on F18:** (a) the streak
+  rule; flip `F18_STREAKS_FINAL` in
+  `lib/server/services/leaderboard/leaderboard.ts` to show
+  `user_scores.current_streak`; (b) a finalized per-round conformance
+  outcome for hit rate (`competition_results` still carries the retired
+  categories); (c) if F18 credits starter grants into `total_points`, they
+  count toward rank, so decide whether that is intended; (d) confirmation
+  that F18 writes one `score_events` row per participating user per settled
+  round, including zero-point rows, so "Rounds" counts every settled stake.
 - F25. Historical model performance across rounds (conformance rate, crowd
   win rate).
 - F26. User prediction history (stake vs outcome).
