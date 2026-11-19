@@ -67,7 +67,7 @@ insert into public.round_models (round_id, model_id)
 select r.id, m.id
 from public.rounds r
 cross join public.llm_models m
-where r.slug in ('r-main', 'r-lock', 'r-past')
+where r.slug in ('r-main', 'r-lock', 'r-past', 'r-due', 'r-lockedd')
   and m.slug in ('model-a', 'model-b');
 
 -- One pick per user already in place on r-main and r-lock.
@@ -425,6 +425,88 @@ select pg_temp.assert_fails(
   'duplicate signature',
   $sql$insert into public.blockchain_transactions (idempotency_key, signature, purpose, status, user_id) values ('tx-key-2', 'sig-1', 'prediction_commitment', 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001')$sql$,
   '23505');
+
+-- ---------------------------------------------------------------------------
+-- F11 deadline locking: lock_due_rounds is idempotent and deadline-exact
+-- ---------------------------------------------------------------------------
+-- Fixtures: one round past its deadline and still OPEN, one OPEN but not yet
+-- due, one already LOCKED. The function must lock exactly the first.
+insert into public.rounds (slug, challenge_id, prediction_deadline, status) values
+  ('r-due',    (select id from public.challenges where slug = 'c-pub'), now() - interval '5 minutes', 'OPEN'),
+  ('r-notdue', (select id from public.challenges where slug = 'c-pub'), now() + interval '5 minutes', 'OPEN'),
+  ('r-lockedd',(select id from public.challenges where slug = 'c-pub'), now() - interval '5 minutes', 'LOCKED');
+
+select pg_temp.assert_ok('lock_due_rounds locks the due OPEN round',
+  $sql$do $lock$
+  declare
+    v_locked integer;
+    v_round public.rounds;
+  begin
+    select count(*) into v_locked
+      from public.lock_due_rounds(now(), 100, 'test deadline');
+
+    if v_locked = 0 then
+      raise exception 'expected at least one round to lock';
+    end if;
+
+    select * into v_round from public.rounds where slug = 'r-due';
+    if v_round.status <> 'LOCKED' then
+      raise exception 'r-due should be LOCKED, is %', v_round.status;
+    end if;
+    if v_round.locked_at is null then
+      raise exception 'r-due.locked_at was not stamped';
+    end if;
+
+    select * into v_round from public.rounds where slug = 'r-notdue';
+    if v_round.status <> 'OPEN' then
+      raise exception 'r-notdue should stay OPEN, is %', v_round.status;
+    end if;
+  end
+  $lock$$sql$);
+
+-- Re-running changes nothing: the due round is already LOCKED, so it is no
+-- longer OPEN and cannot be selected again.
+select pg_temp.assert_ok('a second lock run is a no-op for already-locked rounds',
+  $sql$do $lock$
+  declare
+    v_before integer;
+    v_after integer;
+    v_events integer;
+  begin
+    select count(*) into v_before from public.rounds where status = 'LOCKED';
+
+    perform public.lock_due_rounds(now(), 100, 'test deadline rerun');
+
+    select count(*) into v_after from public.rounds where status = 'LOCKED';
+    if v_after <> v_before then
+      raise exception 'rerun changed the LOCKED count from % to %', v_before, v_after;
+    end if;
+
+    select count(*) into v_events
+      from public.round_transition_events
+      where round_id = (select id from public.rounds where slug = 'r-due')
+        and from_status = 'OPEN' and to_status = 'LOCKED';
+    if v_events <> 1 then
+      raise exception 'expected exactly one OPEN -> LOCKED audit event for r-due, found %', v_events;
+    end if;
+  end
+  $lock$$sql$);
+
+-- A late prediction is still rejected after the round is LOCKED — the lock
+-- does not open a write window.
+select pg_temp.assert_fails(
+  'prediction insert into a LOCKED, deadline-passed round',
+  $sql$insert into public.predictions (round_id, user_id, category, model_id) values (
+    (select id from public.rounds where slug = 'r-due'),
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'accuracy',
+    (select id from public.llm_models where slug = 'model-a'))$sql$,
+  'P0001');
+
+select pg_temp.assert_fails(
+  'lock_due_rounds rejects a non-positive limit',
+  $sql$select public.lock_due_rounds(now(), 0)$sql$,
+  '22023');
 
 -- ---------------------------------------------------------------------------
 -- F13 sandbox: challenge entry point (the function the sandbox calls)

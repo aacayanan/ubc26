@@ -53,7 +53,8 @@ insert into public.challenges (
   prompt,
   starter_code,
   language,
-  status
+  status,
+  entry_point
 ) values (
   'demo-fizzbuzz',
   1,
@@ -61,13 +62,19 @@ insert into public.challenges (
   'Given an integer n, print one line for each number from 1 through n. Print "Fizz" for multiples of 3, "Buzz" for multiples of 5, and "FizzBuzz" for multiples of both.',
   'def fizzbuzz(n):\n    pass\n',
   'python',
-  'published'
+  'published',
+  -- F13 (20261118101300) requires a published challenge to declare the
+  -- function the sandbox calls. This demo challenge's starter code defines
+  -- `fizzbuzz`, so that is its entry point. Without it this insert violates
+  -- challenges_published_has_entry_point and aborts the whole migration.
+  'fizzbuzz'
 )
 on conflict (slug, version) do update
 set
   title = excluded.title,
   prompt = excluded.prompt,
   starter_code = excluded.starter_code,
+  entry_point = excluded.entry_point,
   status = 'published';
 
 create or replace function public.create_competition(
