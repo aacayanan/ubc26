@@ -6,6 +6,8 @@ import {
   MAX_SOURCE_CHARS,
   PROMPT_TEMPLATE_VERSION,
   toGenerationChallenge,
+  withTokenFloor,
+  DEFAULT_MAX_TOKENS,
   type GenerationChallenge,
 } from "@/lib/server/services/llm/prompt";
 
@@ -209,5 +211,32 @@ describe("extractRenderCode", () => {
     // exceed that legitimately, and the render harness accepts 256 KiB.
     const big = `function drawFrame(t, ctx) {}\n// ${"x".repeat(70 * 1024)}`;
     expect(extractRenderCode(big, "drawFrame").ok).toBe(true);
+  });
+});
+
+describe("withTokenFloor", () => {
+  it("adds a max_tokens when the model config sets none", () => {
+    // Measured: the identical brief ran 5.2 s with a cap and past 100 s
+    // without one, because a reasoning model keeps generating until stopped.
+    expect(withTokenFloor({ temperature: 0 })).toEqual({
+      temperature: 0,
+      max_tokens: DEFAULT_MAX_TOKENS,
+    });
+    expect(withTokenFloor(undefined)).toEqual({
+      max_tokens: DEFAULT_MAX_TOKENS,
+    });
+  });
+
+  it("never overrides an explicit max_tokens", () => {
+    // A model that genuinely needs a larger budget stays configurable.
+    expect(withTokenFloor({ max_tokens: 20_000 })).toEqual({
+      max_tokens: 20_000,
+    });
+  });
+
+  it("does not mutate the caller's config object", () => {
+    const config = { temperature: 0 };
+    withTokenFloor(config);
+    expect(config).toEqual({ temperature: 0 });
   });
 });

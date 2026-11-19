@@ -90,7 +90,13 @@ describe.skipIf(!apiKey || !modelId || !sandboxImage)(
         messages,
         // Deterministic sampling: a temperature above zero makes a flaky
         // integration test, not a better proof.
-        params: { temperature: 0 },
+        //
+        // `max_tokens` is NOT optional here. These are reasoning-capable free
+        // models: with no cap, a realistic brief makes the model generate until
+        // the provider stops it, and the client times out at 90 s. Measured:
+        // 5.2 s with this cap, 100 s+ without, on the identical prompt. This
+        // mirrors `config.max_tokens` in the lineup seed (F33).
+        params: { temperature: 0, max_tokens: 8192 },
         correlationId: "f33-integration",
       });
 
