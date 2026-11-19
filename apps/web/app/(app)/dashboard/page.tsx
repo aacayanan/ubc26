@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
+import PracticeBadge from "@/components/practice-badge";
 
 type DashboardStats = {
   points: number;
@@ -200,12 +201,27 @@ function DashboardContent() {
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
       <div className="w-full max-w-4xl space-y-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Dashboard
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Dashboard
+            </h1>
+            <PracticeBadge />
+          </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Your prediction platform at a glance.
           </p>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+          <span className="font-medium">Practice mode.</span> You can join and
+          predict on rounds others create — only accounts with a linked Solana
+          wallet can create rounds.{" "}
+          <Link
+            href="/link-wallet"
+            className="font-medium underline underline-offset-4"
+          >
+            Link a wallet
+          </Link>
         </div>
 
         {/* Quick stats */}

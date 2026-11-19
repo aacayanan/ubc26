@@ -25,8 +25,8 @@ export function LoginForm() {
     return "/dashboard";
   }
 
-  function finishAuth() {
-    router.push(redirectTarget());
+  function finishAuth(override?: string) {
+    router.push(override ?? redirectTarget());
     router.refresh();
   }
 
@@ -103,7 +103,8 @@ export function LoginForm() {
         if (data.user && !data.session) {
           setNotice("Check your email to confirm your account, then sign in.");
         } else {
-          finishAuth();
+          // First screen after email sign-up: offer the wallet link.
+          finishAuth("/link-wallet");
         }
       }
     } catch (err: unknown) {
