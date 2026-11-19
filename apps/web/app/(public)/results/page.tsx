@@ -1,24 +1,76 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader, Panel, Status } from "@/components/ui";
+import type { ResultDisplayState } from "@ai-showdown/shared";
 
 interface ResultEntry {
   round_id: string;
+  slug: string;
   brief_title: string;
-  /** Reserved for the F15 outcome; a void is a result too, not an absence. */
   kind: "settled" | "voided";
+  display_state: ResultDisplayState;
   conformed_model: string | null;
   crowd_model: string | null;
   pool_points: number;
-  /** Plain-language explanation of why the round settled or was voided (F15). */
   reason: string;
   settled_at: string;
 }
 
+/**
+ * The results list (F19).
+ *
+ * Every settled or voided round, with its two independent outcomes kept apart:
+ * which model conformed to the brief, and which one the crowd named best. Each
+ * card leads to the full result — the three rendered artifacts, a replay of each
+ * model's code, the judge's reasons and the final odds — at `/results/[id]`.
+ *
+ * Status is a dot plus a word, never amber (amber is account-warning only).
+ */
 export default function ResultsPage() {
-  // TODO: load from API — GET /api/results
-  const results: ResultEntry[] = [];
+  const [results, setResults] = useState<ResultEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setReloadKey((key) => key + 1);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/results", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error?.message ?? "Could not load results");
+        }
+        return body.results as ResultEntry[];
+      })
+      .then((loaded) => {
+        if (!active) return;
+        setResults(loaded);
+        setError(null);
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load results",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
 
   return (
     <div className="shell py-14 sm:py-16">
@@ -28,7 +80,30 @@ export default function ResultsPage() {
       />
 
       <div className="mt-10">
-        {results.length === 0 ? (
+        {loading && results.length === 0 ? (
+          <Panel quiet className="px-5 py-8 text-center" aria-busy="true">
+            <p className="t-mono text-[0.625rem] text-faint">
+              Loading results…
+            </p>
+          </Panel>
+        ) : error ? (
+          <div role="alert">
+            <Panel quiet className="px-5 py-8 text-center">
+              <Status tone="amber">Unavailable</Status>
+              <p className="mt-3 text-[0.9375rem] text-ink">
+                Results could not be loaded.
+              </p>
+              <p className="t-body mt-2 text-sm text-muted">{error}</p>
+              <button
+                type="button"
+                onClick={reload}
+                className="btn btn-ghost btn-sm mt-5"
+              >
+                Try again
+              </button>
+            </Panel>
+          </div>
+        ) : results.length === 0 ? (
           <EmptyState
             title="Nothing has settled yet."
             action={
@@ -44,15 +119,18 @@ export default function ResultsPage() {
           <ul className="grid gap-3">
             {results.map((r) => (
               <li key={r.round_id}>
-                <Panel className="p-6">
+                <Link
+                  href={`/results/${r.round_id}`}
+                  className="panel panel-interactive group block p-6"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <h2 className="t-title text-[1.0625rem] text-ink">
                         {r.brief_title}
                       </h2>
-                      {r.kind === "voided" ? (
-                        <Status tone="amber">Void</Status>
-                      ) : null}
+                      <Status tone={r.kind === "voided" ? "violet" : "ink"}>
+                        {r.kind === "voided" ? "Void" : "Settled"}
+                      </Status>
                     </div>
                     <span className="t-mono text-[0.625rem] text-faint">
                       {new Date(r.settled_at).toLocaleString()}
@@ -78,8 +156,6 @@ export default function ResultsPage() {
                     </div>
                   </div>
 
-                  {/* The recorded F15 reason, so a void explains itself rather
-                      than reading as a missing result. */}
                   {r.reason ? (
                     <p className="t-body mt-4 text-xs text-muted">{r.reason}</p>
                   ) : null}
@@ -89,7 +165,7 @@ export default function ResultsPage() {
                       ? "No points moved. Every stake was returned."
                       : `Pool split: ${r.pool_points.toLocaleString()} pts, pro-rata among backers of the conforming model.`}
                   </p>
-                </Panel>
+                </Link>
               </li>
             ))}
           </ul>

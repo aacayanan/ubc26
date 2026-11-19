@@ -279,3 +279,128 @@ export interface JudgeRuling {
   reason: string;
   criteria: JudgeCriterionVerdict[];
 }
+
+// ---------------------------------------------------------------------------
+// F19 results + replay.
+//
+// The payoff screen. After a round runs, is judged and settled, a viewer reads
+// exactly why it landed where it did: which model conformed, which the crowd
+// named best, why each other model forfeited or fell off brief, the final odds,
+// and the rendered artifacts they can replay. These shapes are the contract
+// between the results service, its APIs and the results pages.
+// ---------------------------------------------------------------------------
+
+/**
+ * How a settled round reads at a glance. `pending` is a round that has not been
+ * finally decided yet — it is shown by the detail page but not listed in
+ * results, because there is no outcome to report.
+ */
+export type ResultDisplayState =
+  | "winner"
+  | "tie"
+  | "all-forfeited"
+  | "no-conformer"
+  | "judge-unavailable"
+  | "voided"
+  | "pending";
+
+/** One row in the results list. */
+export interface ResultSummary {
+  roundId: string;
+  slug: string;
+  briefTitle: string;
+  kind: "settled" | "voided";
+  displayState: ResultDisplayState;
+  /** Name of the model that conformed to the brief, or null. */
+  conformedModel: string | null;
+  /** Name of the crowd's fan-favorite, or null when nobody voted. */
+  crowdModel: string | null;
+  poolPoints: number;
+  reason: string;
+  settledAt: string;
+}
+
+/** One model's outcome within a round's full result. */
+export interface ResultModel {
+  modelId: string;
+  name: string;
+  ordinal: number;
+  status: "conformed" | "not_conformed" | "forfeited" | "unavailable" | "pending";
+  /** Plain-language reason the model forfeited or was unrunnable, or null. */
+  forfeitReason: string | null;
+  /** Deterministic gate: the checks that decided whether it could be judged. */
+  gate: {
+    passed: boolean;
+    failureReason: string | null;
+    checks: Array<{ kind: string; passed: boolean; reason: string }>;
+  } | null;
+  /** The judge's ruling with weighted per-criterion reasons, or null if unjudged. */
+  judge: {
+    verdict: "conformed" | "not_conformed" | "unavailable";
+    reason: string;
+    criteria: Array<{
+      id: string;
+      question: string;
+      weight: number;
+      passed: boolean;
+      reason: string;
+    }>;
+  } | null;
+  /** Stored artifact frames (the replay fallback). */
+  frames: RenderedFrame[];
+  /** The finished source, for the quarantined in-browser replay. */
+  solutionCode: string | null;
+  /** Points staked on this model, and the resulting odds. */
+  staked: number;
+  multiplier: number | null;
+  share: number;
+  isWinner: boolean;
+  isFanFavorite: boolean;
+}
+
+/** A round's full result, as the detail + replay page reads it. */
+export interface RoundResult {
+  roundId: string;
+  slug: string;
+  briefTitle: string;
+  briefPrompt: string;
+  status: string;
+  /** True once the round is past OPEN; only then are code and frames present. */
+  revealed: boolean;
+  displayState: ResultDisplayState;
+  /** Geometry the replay needs to draw the same frames the judge saw. */
+  replay: {
+    entryPoint: string;
+    frameWidth: number;
+    frameHeight: number;
+    targetDurationMs: number;
+    frameCount: number;
+  };
+  outcome: {
+    kind: "settled" | "voided";
+    winnerModelId: string | null;
+    fanFavoriteModelId: string | null;
+    tieBreak: "sole-conformer" | "crowd-vote" | "stable-order" | null;
+    reason: string;
+    allForfeited: boolean;
+  } | null;
+  pool: {
+    potPoints: number;
+    models: Array<{
+      modelId: string;
+      name: string;
+      staked: number;
+      multiplier: number | null;
+      share: number;
+    }>;
+  };
+  crowd: { counts: Record<string, number>; awardPoints: number } | null;
+  models: ResultModel[];
+  /** The viewer's own stake, or null when signed out / not staked. */
+  viewerStake: {
+    modelId: string;
+    points: number;
+    outcome: "won" | "lost" | "void" | null;
+    awarded: number | null;
+  } | null;
+}
