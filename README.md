@@ -67,6 +67,12 @@ Configure these when the corresponding integrations are implemented:
   on: sandbox result writes have no RLS write policy, so only the
   service role can record evaluation results.
 
+OpenRouter calls have optional tuning knobs, all defaulted:
+`OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_MS` (60000),
+`OPENROUTER_MAX_ATTEMPTS` (3) and `OPENROUTER_FORFEIT_THRESHOLD` (3). The
+model lineup is not configured here — it is the active rows in the
+`llm_models` table, ordered by `sort_order`.
+
 Never commit real API keys or secrets.
 
 ## Authentication
@@ -146,6 +152,18 @@ npm run format:check
 Check formatting without changing files.
 
 ```bash
+npm test
+```
+
+Run unit tests with Vitest (no network needed). The live OpenRouter check is
+skipped unless `OPENROUTER_API_KEY` and `OPENROUTER_TEST_MODEL_ID` are set:
+
+```bash
+OPENROUTER_API_KEY=... OPENROUTER_TEST_MODEL_ID=... npx vitest run \
+  test/integration/openrouter.integration.test.ts --root apps/web
+```
+
+```bash
 npm run typecheck
 ```
 
@@ -168,11 +186,14 @@ linked project.
 
 ## Database
 
-The schema lives in `supabase/migrations/` — ten ordered SQL files covering
+The schema lives in `supabase/migrations/` — thirteen ordered SQL files covering
 users, wallets, model/challenge catalogs, rounds, predictions, evaluation,
 settlement, blockchain transactions, the RLS policies, and the profile-sync
-trigger that creates a `public.users` row for every new auth account. They apply
-cleanly in order to a fresh Supabase project via `npm run db:push`.
+trigger that creates a `public.users` row for every new auth account. The last
+three extend evaluation for the sandbox (F13: `challenges.entry_point`,
+`model_executions.sandbox_image`/`harness_protocol`) and for OpenRouter (F16:
+`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`). They
+apply cleanly in order to a fresh Supabase project via `npm run db:push`.
 
 Each new auth user gets its `public.users` row from the `on_auth_user_created`
 trigger in `20261118100900_profile_sync_and_funding_status.sql`. Without that
@@ -275,6 +296,17 @@ authentication, competitions, evaluation, scoring, and blockchain.
 
 External integrations are separated into Supabase, OpenRouter,
 and Solana modules.
+
+The OpenRouter client (F16) lives in
+`lib/server/integrations/openrouter/`. Every model receives the same prompt
+from `lib/server/services/llm/prompt.ts`; each call records the exact model id,
+the generation params, the prompt-template version and a hash of the prompt
+text, plus latency and per-attempt diagnostics in `model_executions`. Timeouts,
+rate limits, unavailable models, malformed output and auth/credit failures are
+typed outcomes, not exceptions. Transient failures are retried up to
+`OPENROUTER_MAX_ATTEMPTS`; after `OPENROUTER_FORFEIT_THRESHOLD` failed attempts
+the model forfeits the round. The row-level `attempt` is the orchestration
+attempt (F17) and never advances because of an internal retry.
 
 The shared package contains reusable TypeScript definitions.
 
