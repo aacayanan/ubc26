@@ -1,21 +1,53 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { EmptyState, PageHeader, Panel, Status } from "@/components/ui";
 
 interface StakeRecord {
   id: string;
-  round_id: string;
-  brief_title: string;
-  picked_model: string;
+  roundId: string;
+  briefTitle: string;
+  pickedModel: string;
   points: number;
+  awarded: number | null;
   outcome: "won" | "lost" | "void" | null;
-  created_at: string;
+  roundStatus: string;
+  createdAt: string;
 }
 
 export default function PredictionsPage() {
-  // TODO: load from API — GET /api/stakes?user_id=...
-  const stakes: StakeRecord[] = [];
+  const [stakes, setStakes] = useState<StakeRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/stakes", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error?.message ?? "Could not load your stakes");
+        }
+        return body.stakes as StakeRecord[];
+      })
+      .then((loaded) => {
+        if (active) setStakes(loaded);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setError(
+            loadError instanceof Error ? loadError.message : "Load failed",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="shell py-12 sm:py-14">
@@ -25,7 +57,15 @@ export default function PredictionsPage() {
       />
 
       <div className="mt-10">
-        {stakes.length === 0 ? (
+        {loading ? (
+          <p className="t-label text-[0.625rem] text-faint">Loading…</p>
+        ) : error ? (
+          <Panel className="p-5">
+            <p role="alert" className="text-sm text-magenta">
+              {error}
+            </p>
+          </Panel>
+        ) : stakes.length === 0 ? (
           <EmptyState
             title="You haven't staked on a round yet."
             action={
@@ -42,21 +82,26 @@ export default function PredictionsPage() {
             {stakes.map((stake) => (
               <li key={stake.id}>
                 <Link
-                  href={`/competitions/${stake.round_id}`}
+                  href={`/competitions/${stake.roundId}`}
                   className="panel panel-interactive block p-5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-[0.9375rem] text-ink">
-                        {stake.brief_title}
+                        {stake.briefTitle}
                       </p>
                       <p className="t-mono mt-1 text-[0.6875rem] text-faint">
-                        {stake.picked_model} · {stake.points} pts ·{" "}
-                        {new Date(stake.created_at).toLocaleDateString()}
+                        {stake.pickedModel} · {stake.points} pts ·{" "}
+                        {new Date(stake.createdAt).toLocaleDateString()}
                       </p>
                     </div>
 
-                    <div className="shrink-0">
+                    <div className="flex shrink-0 items-center gap-3">
+                      {stake.awarded !== null ? (
+                        <span className="t-num text-[0.8125rem] text-muted">
+                          {stake.awarded > 0 ? `+${stake.awarded}` : "0"} pts
+                        </span>
+                      ) : null}
                       {stake.outcome === "won" ? (
                         <Status tone="live">Won</Status>
                       ) : stake.outcome === "lost" ? (

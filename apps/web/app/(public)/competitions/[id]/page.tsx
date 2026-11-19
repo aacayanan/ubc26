@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CrosshairMark,
   Meter,
@@ -18,17 +18,55 @@ interface RoundDetail {
   brief_text: string;
   models: { id: string; name: string }[];
   deadline: string;
+  /** Lifecycle status; the component reads it as `state`. */
   state: string;
   pool_points: number;
   pool_capacity: number;
   user_stake: { model_id: string; points: number } | null;
 }
 
+/** What `GET /api/rounds/[id]` returns: `status`, not `state`. */
+type ApiRound = Omit<RoundDetail, "state"> & { status: string };
+
 export default function CompetitionDetailPage() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const roundId = params?.id;
 
-  // TODO: load from API — GET /api/rounds/[id]
-  const round = null as RoundDetail | null;
+  const [round, setRound] = useState<RoundDetail | null>(null);
+  const [loading, setLoading] = useState(Boolean(roundId));
+
+  // Load the round. `round` stays null only while loading or when the id is
+  // unknown — a real round now renders instead of the "closed" fallback.
+  useEffect(() => {
+    if (!roundId) return;
+    let active = true;
+    fetch(`/api/rounds/${roundId}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 404) return null;
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error?.message ?? "Could not load the round");
+        }
+        return body.round as ApiRound;
+      })
+      .then((loaded) => {
+        if (!active) return;
+        // The API returns `status`; the component reads `state`. Normalise here
+        // rather than at 15 call sites — reading a missing `state` silently made
+        // every round look closed.
+        setRound(loaded ? { ...loaded, state: loaded.status } : null);
+      })
+      .catch(() => {
+        if (active) setRound(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [roundId]);
 
   const [selected, setSelected] = useState<string>("");
   const [stake, setStake] = useState<string>("250");
@@ -37,15 +75,19 @@ export default function CompetitionDetailPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!round) return;
     setSaving(true);
     setError(null);
     try {
-      // TODO: POST /api/rounds/[id]/stakes
-      // await fetch(`/api/rounds/${round?.id}/stakes`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ model_id: selected, points: Number(stake) }),
-      // });
+      const response = await fetch(`/api/rounds/${round.id}/stakes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelId: selected, points: Number(stake) }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? "Could not place the stake");
+      }
       router.push("/predictions");
     } catch (err: unknown) {
       setError(
@@ -54,6 +96,16 @@ export default function CompetitionDetailPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="shell py-14 sm:py-20">
+        <div className="panel-quiet mx-auto max-w-xl px-6 py-16 text-center">
+          <p className="t-label text-[0.625rem] text-faint">Loading round…</p>
+        </div>
+      </div>
+    );
   }
 
   if (!round) {
