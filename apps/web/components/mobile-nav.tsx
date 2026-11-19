@@ -1,51 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import NavLink from "@/components/nav-link";
+import { appDrawerNav, marketingNav } from "@/components/nav-items";
 
 interface MobileNavProps {
   variant: "marketing" | "app";
 }
 
-interface NavLinkItem {
-  href: string;
-  label: string;
-}
-
-const linksByVariant: Record<"marketing" | "app", NavLinkItem[]> = {
-  marketing: [
-    { href: "/", label: "Landing" },
-    { href: "/leaderboard", label: "Leaderboard" },
-    { href: "/models", label: "Models" },
-    { href: "/competitions", label: "Competitions" },
-  ],
-  app: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/competitions", label: "Competitions" },
-    { href: "/leaderboard", label: "Leaderboard" },
-    { href: "/models", label: "Models" },
-    { href: "/profile", label: "Profile" },
-  ],
-};
-
 export default function MobileNav({ variant }: MobileNavProps) {
   const [open, setOpen] = useState(false);
-  const links = linksByVariant[variant];
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const links = variant === "app" ? appDrawerNav : marketingNav;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <div className="sm:hidden">
       <button
         type="button"
         aria-label={open ? "Close menu" : "Open menu"}
+        ref={buttonRef}
         aria-expanded={open}
+        aria-controls="mobile-menu"
         onClick={() => setOpen((value) => !value)}
-        className="rounded-lg p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+        className="-ml-1 grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-white/[0.04] hover:text-ink"
       >
         <svg
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.4"
           strokeLinecap="round"
           className="size-5"
           aria-hidden="true"
@@ -59,28 +54,28 @@ export default function MobileNav({ variant }: MobileNavProps) {
             <>
               <path d="M4 7h16" />
               <path d="M4 12h16" />
-              <path d="M4 17h16" />
+              <path d="M4 17h10" />
             </>
           )}
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute inset-x-0 top-full border-b border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <nav className="flex flex-col gap-1">
+      {open ? (
+        <div
+          id="mobile-menu"
+          className="absolute inset-x-0 top-full border-b border-hairline bg-[rgb(5_4_10/0.96)] px-3 pb-4 pt-2 backdrop-blur-xl"
+        >
+          <nav aria-label="Mobile" className="flex flex-col gap-0.5">
             {links.map((link) => (
-              <NavLink key={link.href} href={link.href}>
-                <span
-                  className="block rounded-lg px-3 py-2"
-                  onClick={() => setOpen(false)}
-                >
+              <div key={link.href} onClick={() => setOpen(false)}>
+                <NavLink href={link.href} block>
                   {link.label}
-                </span>
-              </NavLink>
+                </NavLink>
+              </div>
             ))}
           </nav>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

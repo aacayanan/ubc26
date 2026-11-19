@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { EmptyState, PageHeader, Panel } from "@/components/ui";
+
 interface LeaderboardEntry {
   user_id: string;
   username: string;
@@ -9,64 +12,103 @@ interface LeaderboardEntry {
   streak: number;
 }
 
+const rankTone = ["dot-live", "dot-violet", "dot-ink"];
+
 export default function LeaderboardPage() {
   // TODO: load from API — GET /api/leaderboard
   const leaderboard: LeaderboardEntry[] = [];
 
-  const medals = ["🥇", "🥈", "🥉"];
-
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-2xl">
-        <h1 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Leaderboard
-        </h1>
+    <div className="shell py-14 sm:py-16">
+      <PageHeader
+        title="Leaderboard"
+        description="Points are awarded when a round settles — stake on the model that conforms to the brief and you take a share of the pool."
+      />
 
+      <div className="mt-10">
         {leaderboard.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No leaderboard data yet. Competitions must settle to populate
-              rankings.
-            </p>
-          </div>
+          <EmptyState
+            title="No one has scored yet."
+            action={
+              <Link href="/competitions" className="btn btn-ghost btn-sm">
+                Browse open rounds
+              </Link>
+            }
+          >
+            Rankings populate the first time a round settles and its pool is
+            split. Until then every account sits on zero.
+          </EmptyState>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <Panel className="overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400">
-                  <th className="px-4 py-3">#</th>
-                  <th className="px-4 py-3">User</th>
-                  <th className="px-4 py-3 text-right">Points</th>
-                  <th className="px-4 py-3 text-right">Correct</th>
-                  <th className="px-4 py-3 text-right">Streak</th>
+                <tr className="border-b border-hairline">
+                  <th
+                    scope="col"
+                    className="t-label w-14 px-5 py-3.5 text-left text-[0.5625rem] font-normal text-faint"
+                  >
+                    #
+                  </th>
+                  <th
+                    scope="col"
+                    className="t-label px-5 py-3.5 text-left text-[0.5625rem] font-normal text-faint"
+                  >
+                    Account
+                  </th>
+                  <th
+                    scope="col"
+                    className="t-label px-5 py-3.5 text-right text-[0.5625rem] font-normal text-faint"
+                  >
+                    Points
+                  </th>
+                  <th
+                    scope="col"
+                    className="t-label hidden px-5 py-3.5 text-right text-[0.5625rem] font-normal text-faint sm:table-cell"
+                  >
+                    Conformed
+                  </th>
+                  <th
+                    scope="col"
+                    className="t-label hidden px-5 py-3.5 text-right text-[0.5625rem] font-normal text-faint sm:table-cell"
+                  >
+                    Streak
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {leaderboard.map((entry, idx) => (
                   <tr
                     key={entry.user_id}
-                    className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/50 dark:hover:bg-zinc-800/30"
+                    className="border-b border-hairline transition-colors last:border-0 hover:bg-white/[0.025]"
                   >
-                    <td className="px-4 py-3 text-zinc-400">
-                      {idx < 3 ? medals[idx] : idx + 1}
+                    <td className="px-5 py-4">
+                      <span className="flex items-center gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className={`dot ${rankTone[idx] ?? "dot-idle"}`}
+                        />
+                        <span className="t-num text-[0.75rem] text-faint">
+                          {idx + 1}
+                        </span>
+                      </span>
                     </td>
-                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
+                    <td className="px-5 py-4 text-ink">
                       {entry.display_name || entry.username}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono font-medium text-zinc-700 dark:text-zinc-300">
-                      {entry.total_points}
+                    <td className="t-num px-5 py-4 text-right text-ink">
+                      {entry.total_points.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-500 dark:text-zinc-400">
+                    <td className="t-num hidden px-5 py-4 text-right text-muted sm:table-cell">
                       {entry.correct_predictions}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-500 dark:text-zinc-400">
+                    <td className="t-num hidden px-5 py-4 text-right text-muted sm:table-cell">
                       {entry.streak}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Panel>
         )}
       </div>
     </div>

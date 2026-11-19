@@ -1,82 +1,85 @@
 "use client";
 
 import Link from "next/link";
+import { EmptyState, PageHeader, Panel, Status } from "@/components/ui";
 
-interface PredictionRecord {
+interface StakeRecord {
   id: string;
-  competition_id: string;
-  competition_title: string;
-  category: string;
+  round_id: string;
+  brief_title: string;
   picked_model: string;
-  result: "correct" | "incorrect" | null;
+  points: number;
+  outcome: "won" | "lost" | "void" | null;
   created_at: string;
 }
 
 export default function PredictionsPage() {
-  // TODO: load from API — GET /api/predictions?user_id=...
-  const predictions: PredictionRecord[] = [];
+  // TODO: load from API — GET /api/stakes?user_id=...
+  const stakes: StakeRecord[] = [];
 
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-3xl">
-        <h1 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          My Predictions
-        </h1>
+    <div className="shell py-12 sm:py-14">
+      <PageHeader
+        title="My predictions"
+        description="Every stake you have placed and what it returned. A stake resolves when the round settles — the points pool splits pro-rata among everyone who staked on the model that conformed."
+      />
 
-        {predictions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No predictions yet.{" "}
-              <Link
-                href="/competitions"
-                className="font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
-              >
-                Browse competitions
-              </Link>{" "}
-              to make your first pick.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {predictions.map((pred) => (
-              <Link
-                key={pred.id}
-                href={`/competitions/${pred.competition_id}`}
-                className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                      {pred.competition_title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                      {pred.category} · Picked{" "}
-                      <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                        {pred.picked_model}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="shrink-0">
-                    {pred.result === "correct" ? (
-                      <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                        ✓ Correct
-                      </span>
-                    ) : pred.result === "incorrect" ? (
-                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
-                        ✗ Wrong
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                </div>
+      <div className="mt-10">
+        {stakes.length === 0 ? (
+          <EmptyState
+            title="You haven't staked on a round yet."
+            action={
+              <Link href="/competitions" className="btn btn-ghost btn-sm">
+                Browse rounds
               </Link>
+            }
+          >
+            Join an open round and stake points on the model you think follows
+            the brief. Your commitment is sealed before anything renders.
+          </EmptyState>
+        ) : (
+          <ul className="grid gap-3">
+            {stakes.map((stake) => (
+              <li key={stake.id}>
+                <Link
+                  href={`/competitions/${stake.round_id}`}
+                  className="panel panel-interactive block p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[0.9375rem] text-ink">
+                        {stake.brief_title}
+                      </p>
+                      <p className="t-mono mt-1 text-[0.6875rem] text-faint">
+                        {stake.picked_model} · {stake.points} pts ·{" "}
+                        {new Date(stake.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0">
+                      {stake.outcome === "won" ? (
+                        <Status tone="live">Won</Status>
+                      ) : stake.outcome === "lost" ? (
+                        <Status tone="idle">Lost</Status>
+                      ) : stake.outcome === "void" ? (
+                        <Status tone="amber">Void</Status>
+                      ) : (
+                        <Status tone="violet">Awaiting settle</Status>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
+
+      <Panel quiet className="mt-8 px-5 py-4">
+        <p className="t-body text-xs text-faint">
+          Points only. Stakes never convert to money and are never transferable.
+        </p>
+      </Panel>
     </div>
   );
 }

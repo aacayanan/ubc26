@@ -16,12 +16,12 @@ export default function DisplayNameForm({
   });
 
   return (
-    <form action={formAction} className="mt-4 space-y-3">
+    <form
+      action={formAction}
+      className="mt-6 space-y-3 border-t border-hairline pt-6"
+    >
       <div>
-        <label
-          htmlFor="displayName"
-          className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-        >
+        <label htmlFor="displayName" className="t-label mb-2 block text-faint">
           Display name
         </label>
         <input
@@ -31,7 +31,8 @@ export default function DisplayNameForm({
           maxLength={40}
           defaultValue={state.value}
           placeholder="How you appear on the leaderboard"
-          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
+          aria-describedby={state.message ? "display-name-status" : undefined}
+          className="field"
         />
       </div>
 
@@ -39,22 +40,21 @@ export default function DisplayNameForm({
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="btn btn-solid btn-sm"
         >
           {pending ? "Saving…" : "Save"}
         </button>
-        {state.message && (
+        {state.message ? (
           <p
+            id="display-name-status"
             role="status"
-            className={`text-sm ${
-              state.ok
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
+            className={`text-[0.8125rem] ${
+              state.ok ? "text-muted" : "text-magenta"
             }`}
           >
             {state.message}
           </p>
-        )}
+        ) : null}
       </div>
     </form>
   );

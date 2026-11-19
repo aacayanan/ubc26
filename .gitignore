@@ -20,3 +20,6 @@ coverage/
 # Local operating system files
 .DS_Store
 Thumbs.db
+
+# Impeccable review captures (large, regenerated locally)
+.impeccable/review/

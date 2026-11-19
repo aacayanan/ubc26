@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import PracticeBadge from "@/components/practice-badge";
+import {
+  PageHeader,
+  Panel,
+  Readout,
+  SectionHeading,
+  Status,
+} from "@/components/ui";
 import { NotFoundError } from "@/lib/server/errors/app-error";
 import { getCorrelationId } from "@/lib/server/http/api-error";
 import { logger } from "@/lib/server/logging/logger";
@@ -10,52 +18,27 @@ import {
 } from "@/lib/server/services/profile/profile";
 import DisplayNameForm from "./display-name-form";
 
+export const metadata: Metadata = { title: "Profile" };
+
 function ProfileUnavailable() {
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-xl space-y-4" role="alert">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Profile
-        </h1>
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400">
-          <p className="font-medium">Your profile could not be loaded.</p>
-          <p className="mt-1">
+    <div className="shell py-12 sm:py-14">
+      <div className="max-w-xl" role="alert">
+        <PageHeader title="Profile" />
+        <Panel quiet className="mt-8 p-6">
+          <Status tone="amber">Account record missing</Status>
+          <p className="t-title mt-4 text-lg text-ink">
+            Your profile could not be loaded.
+          </p>
+          <p className="t-body mt-2 text-sm text-muted">
             You are signed in, but your account record is missing. Reload to
             retry the automatic repair, or sign out and back in.
           </p>
-        </div>
-        <Link
-          href="/dashboard"
-          className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
-          Back to dashboard
-        </Link>
+          <Link href="/dashboard" className="btn btn-solid btn-sm mt-6">
+            Back to dashboard
+          </Link>
+        </Panel>
       </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: number;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-lg bg-zinc-50 p-3 text-center dark:bg-zinc-800/50">
-      <p
-        className={`text-2xl font-bold ${
-          accent
-            ? "text-green-600 dark:text-green-400"
-            : "text-zinc-900 dark:text-zinc-50"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
     </div>
   );
 }
@@ -82,57 +65,74 @@ export default async function ProfilePage() {
     .toUpperCase();
 
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-xl">
-        <h1 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Profile
-        </h1>
+    <div className="shell py-12 sm:py-14">
+      <div className="max-w-2xl space-y-8">
+        <PageHeader title="Profile" />
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <Panel className="p-6 sm:p-7">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 text-xl font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            <div className="grid size-14 shrink-0 place-items-center rounded-full border border-hairline bg-white/[0.05] text-lg font-medium text-ink">
               {initials}
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-[1.0625rem] font-medium text-ink">
                   {profile.displayName ?? "Anonymous"}
                 </h2>
-                {profile.practiceMode && <PracticeBadge label="Practice" />}
-                {!profile.funded && <PracticeBadge label="No wallet" />}
+                {!profile.funded ? (
+                  <PracticeBadge label="No wallet" />
+                ) : profile.practiceMode ? (
+                  <PracticeBadge label="Practice" />
+                ) : null}
               </div>
-              <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="mt-1 truncate text-sm text-muted">
                 {user.email ?? "Signed in with a Solana wallet"}
               </p>
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="Points" value={profile.points} />
-            <Stat label="Predictions" value={profile.predictions} />
-            <Stat label="Streak" value={profile.currentStreak} />
-            <Stat label="Best Streak" value={profile.longestStreak} />
+          <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-4">
+            {[
+              { label: "Points", value: profile.points.toLocaleString() },
+              { label: "Predictions", value: profile.predictions },
+              { label: "Streak", value: profile.currentStreak },
+              { label: "Best streak", value: profile.longestStreak },
+            ].map((s) => (
+              <div key={s.label} className="bg-[rgb(11_9_18/0.62)] px-4 py-4">
+                <Readout label={s.label} value={s.value} />
+              </div>
+            ))}
           </div>
 
           <DisplayNameForm initialValue={profile.displayName ?? ""} />
-        </div>
+        </Panel>
 
-        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-            Wallet
-          </h3>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {profile.funded
-              ? "A Solana wallet is linked to this account."
-              : "Link a Solana wallet to join live rounds and verify prediction commitments on-chain."}
-          </p>
-          <Link
-            href="/link-wallet"
-            className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+        <section>
+          <SectionHeading
+            aside={
+              profile.funded ? (
+                <Status tone="ink">Linked</Status>
+              ) : (
+                <Status tone="amber">Not linked</Status>
+              )
+            }
           >
-            {profile.funded ? "Manage wallet" : "Connect Solana wallet"}
-          </Link>
-        </div>
+            Wallet
+          </SectionHeading>
+          <Panel className="mt-4 p-6">
+            <p className="t-body text-sm text-muted">
+              {profile.funded
+                ? "A Solana wallet is linked to this account. Stakes are sealed against it before every deadline."
+                : "Link a Solana wallet to stake on live rounds and verify your prediction commitments on-chain. You can keep browsing and voting without one."}
+            </p>
+            <Link
+              href="/link-wallet"
+              className="btn btn-ghost btn-sm mt-5 inline-flex"
+            >
+              {profile.funded ? "Manage wallet" : "Link a wallet"}
+            </Link>
+          </Panel>
+        </section>
       </div>
     </div>
   );

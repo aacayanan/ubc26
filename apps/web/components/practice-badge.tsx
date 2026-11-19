@@ -1,7 +1,9 @@
+import { Status } from "@/components/ui";
+
 /**
- * Status pill for accounts that cannot join live rounds: either no Solana
- * wallet is linked ("No wallet"), or a funded account has opted into paper
- * trading ("Practice"). Rounds are created by the admin, never by users —
+ * Status pill for accounts that cannot stake on a live round: either no Solana
+ * wallet is linked ("No wallet"), or a wallet-identified account has opted into
+ * paper mode ("Practice"). Rounds are created by the admin, never by users —
  * users only join them.
  */
 export default function PracticeBadge({
@@ -13,14 +15,21 @@ export default function PracticeBadge({
 }) {
   return (
     <span
+      className={className}
       title={
         label === "Practice"
-          ? "Practice mode: joining is paper only, no prompt session starts"
-          : "Link a Solana wallet to join live rounds"
+          ? "Practice mode: voting and browsing only, no stake is placed"
+          : "Link a Solana wallet to stake on live rounds"
       }
-      className={`inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 ${className}`}
     >
-      {label}
+      <Status tone="amber">
+        {label}
+        <span className="sr-only">
+          {label === "Practice"
+            ? " — browsing and voting only, no stake is placed"
+            : " — link a Solana wallet to stake on live rounds"}
+        </span>
+      </Status>
     </span>
   );
 }

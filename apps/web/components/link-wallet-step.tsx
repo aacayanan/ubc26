@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Status } from "@/components/ui";
 import {
   getLinkedWallet,
   getWalletAddress,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/wallets/link";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
-type Status = "checking" | "unlinked" | "linked" | "error";
+type WalletState = "checking" | "unlinked" | "linked" | "error";
 
 /** Stand-in for wallet sign-in users, whose address lives in their identity. */
 const walletPlaceholder: WalletLink = { address: "wallet", verifiedAt: null };
@@ -25,7 +26,7 @@ export default function LinkWalletStep({
   allowSkip?: boolean;
 }) {
   const router = useRouter();
-  const [status, setStatus] = useState<Status>("checking");
+  const [status, setStatus] = useState<WalletState>("checking");
   const [wallet, setWallet] = useState<WalletLink | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,9 @@ export default function LinkWalletStep({
       } catch (err) {
         if (cancelled) return;
         setError(
-          err instanceof Error ? err.message : "Could not check your wallet.",
+          err instanceof Error
+            ? err.message
+            : "Could not read your wallet status. Reload the page to try again.",
         );
         setStatus("error");
       }
@@ -76,7 +79,7 @@ export default function LinkWalletStep({
       if (!address) {
         throw new Error(
           window.solana
-            ? "Wallet connection was cancelled."
+            ? "Wallet connection cancelled. Approve the request in Phantom and try again."
             : "No Solana wallet found. Install Phantom, then reload this page.",
         );
       }
@@ -90,7 +93,11 @@ export default function LinkWalletStep({
       setWallet(await linkWallet(supabase, user, address));
       setStatus("linked");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not link wallet.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not link your wallet. Approve the request in Phantom and try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -140,79 +147,100 @@ export default function LinkWalletStep({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-black">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-lg dark:bg-zinc-900">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+    <div className="flex min-h-[calc(100svh-64px)] items-center justify-center px-5 py-14">
+      <div className="panel w-full max-w-[420px] p-8">
+        <div>
+          <h1 className="t-title text-[1.5rem] text-ink">
             Link your Solana wallet
           </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Linking lets you join live rounds and verify your predictions
+          <p className="t-body mt-2.5 text-sm text-muted">
+            Linking lets you stake on live rounds and verify your predictions
             on-chain. You can skip this and explore in practice mode first.
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400">
+        {error ? (
+          <p
+            role="alert"
+            className="mt-6 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3.5 py-2.5 text-[0.8125rem] text-magenta"
+          >
             {error}
-          </div>
-        )}
+          </p>
+        ) : null}
 
-        {status === "checking" && (
-          <p className="text-center text-sm text-zinc-500">Checking…</p>
-        )}
+        {status === "checking" ? (
+          <p className="t-mono mt-8 text-[0.6875rem] tracking-[0.14em] text-faint">
+            CHECKING WALLET…
+          </p>
+        ) : null}
 
-        {status === "linked" && wallet && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-              {wallet.address === walletPlaceholder.address
-                ? "Signed in with your Solana wallet."
-                : `Linked ${shortAddress(wallet.address)}`}
+        {status === "linked" && wallet ? (
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border border-hairline bg-white/[0.02] px-4 py-3">
+              <Status tone="ink">Linked</Status>
+              <span className="t-mono ml-auto text-[0.6875rem] text-muted">
+                {wallet.address === walletPlaceholder.address
+                  ? "wallet identity"
+                  : shortAddress(wallet.address)}
+              </span>
             </div>
             <button
               type="button"
               onClick={() => void continueLive()}
-              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              disabled={busy}
+              className="btn btn-solid btn-block"
             >
               Continue
             </button>
             <button
               type="button"
               onClick={handleSkip}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              disabled={busy}
+              className="btn btn-ghost btn-block"
             >
-              Use a practice account instead
+              Continue in practice mode
             </button>
           </div>
-        )}
+        ) : null}
 
-        {(status === "unlinked" || status === "error") && (
-          <div className="space-y-3">
+        {status === "unlinked" || status === "error" ? (
+          <div className="mt-6 space-y-3">
             <button
               type="button"
               onClick={() => void handleLink()}
               disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="btn btn-primary btn-block"
             >
-              <span aria-hidden="true">◎</span>
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                aria-hidden="true"
+              >
+                <path d="M6 15.5 8.5 8.5h9.5" strokeLinecap="round" />
+                <path d="M8.5 8.5 18 15.5H8" strokeLinecap="round" />
+                <circle cx="12" cy="12" r="9.2" opacity="0.35" />
+              </svg>
               {busy ? "Waiting for wallet…" : "Connect Solana wallet"}
             </button>
-            {allowSkip && (
+            {allowSkip ? (
               <button
                 type="button"
                 onClick={handleSkip}
                 disabled={busy}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="btn btn-ghost btn-block"
               >
-                Skip for now — continue in practice mode
+                Continue in practice mode
               </button>
-            )}
-            <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
-              Practice accounts can browse rounds and watch results, but only a
-              funded Solana account can join a live round.
+            ) : null}
+            <p className="t-body text-center text-xs text-faint">
+              Practice accounts can browse rounds, watch renders and vote, but
+              only a wallet-linked account can stake on a live round.
             </p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
