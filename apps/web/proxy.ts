@@ -1,7 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/dashboard", "/predictions", "/profile", "/link-wallet"];
+const PROTECTED = [
+  "/admin",
+  "/dashboard",
+  "/predictions",
+  "/profile",
+  "/link-wallet",
+];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

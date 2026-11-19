@@ -31,8 +31,8 @@ a vision model; "best" is decided by the crowd.
   profile, first-run wallet link (route groups do not change URLs)
 - `apps/web/proxy.ts` - Per-request protected-route gate and token refresh
   (Next 16 renamed `middleware.ts` to `proxy.ts`)
-- `apps/web/components` - Shared shell: header, mobile nav, sign-out,
-  practice badge, wallet-link flow
+- `apps/web/components` - Design-system primitives (`ui.tsx`), icon set,
+  logo, site header, mobile nav, wallet-link flow, and the WebGL hero field
 - `apps/web/lib/supabase` - Browser Supabase client (publishable key only)
 - `apps/web/lib/wallets` - Wallet link helpers and practice-mode toggle
 - `packages/shared` - Shared TypeScript definitions
@@ -348,6 +348,35 @@ sidecar at deploy time (deployment host is still an open item, F28). Full
 control stack, measured attack results, and residual risks:
 [`docs/sandbox-threat-model.md`](docs/sandbox-threat-model.md).
 
+## Design system
+
+The web app runs one committed visual world — organic cybernetic
+minimalism. Monochrome instrumentation carries a single magenta and a
+single violet; halftone dot fields, film grain and a WebGL flow field are
+the only organic material. It is dark-only by design.
+
+- `apps/web/DESIGN.md` — the built system: palette, type, material,
+  status, atmosphere, motion, and component vocabulary
+- `apps/web/.impeccable/design.json` — the same tokens, machine-readable
+- `apps/web/PRODUCT.md` — product truth the interface must not contradict
+- `apps/web/app/globals.css` — where every token actually lives (Tailwind
+  v4 `@theme` plus a `:root` block)
+
+Conventions when touching the UI:
+
+- Never use raw Tailwind palette classes (`zinc-*`, `blue-*`). Use the
+  design tokens: `bg-void`, `text-ink`, `text-muted`, `text-faint`,
+  `border-hairline`, `text-magenta`, `text-violet`.
+- Reach for the primitives in `apps/web/components/ui.tsx` (`Panel`,
+  `Status`, `Meter`, `PageHeader`, `SectionHeading`, `EmptyState`,
+  `Readout`) and the icon set in `components/icons.tsx` before writing
+  new markup. Icons are authored SVGs, never font glyphs or emoji.
+- Status is a 6px dot plus a word, never a filled colour chip. Selection
+  and phase must be legible without colour.
+- The hero vortex (`components/vortex-field.tsx`) is a three.js flow
+  field. It must keep its `prefers-reduced-motion` still frame, its CSS
+  underlay fallback, and its pause-when-offscreen behaviour.
+
 ## Architecture
 
 Server-side business logic is organized into services for
@@ -374,6 +403,11 @@ Competition lifecycle transitions use a shared state machine in
 same transition rules through `public.transition_round(...)`, a
 compare-and-set RPC that creates auditable lifecycle events and has
 retry-safe same-status behavior.
+
+Administrators use the same Supabase login as regular users and are routed
+to `/admin`. The protected admin dashboard creates and opens competitions
+through the server-only `public.create_competition(...)` RPC; regular users
+see only OPEN competitions through `/api/competitions`.
 
 API routes and background jobs use the server error convention in
 `apps/web/lib/server/errors/app-error.ts`. API failures use the shared
