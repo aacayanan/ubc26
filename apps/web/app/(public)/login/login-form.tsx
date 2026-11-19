@@ -40,6 +40,9 @@ export function LoginForm() {
     if (message.toLowerCase().includes("already registered")) {
       return "That email already has an account. Try signing in instead.";
     }
+    if (message.toLowerCase().includes("user rejected")) {
+      return "Wallet signature cancelled. Approve the request in Phantom to sign in.";
+    }
     return message;
   }
 
@@ -47,6 +50,34 @@ export function LoginForm() {
     setMode(mode === "sign-in" ? "sign-up" : "sign-in");
     setError(null);
     setNotice(null);
+  }
+
+  async function handleSolanaLogin() {
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      if (!window.solana) {
+        throw new Error(
+          "No Solana wallet found. Install Phantom, then reload this page.",
+        );
+      }
+      const { error } = await getBrowserSupabase().auth.signInWithWeb3({
+        chain: "solana",
+        statement: "Sign in to AI Showdown to make predictions.",
+        wallet: window.solana,
+      });
+      if (error) throw error;
+      finishAuth();
+    } catch (err: unknown) {
+      setError(
+        friendlyError(
+          err instanceof Error ? err.message : "Wallet sign-in failed",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -157,6 +188,30 @@ export function LoginForm() {
                 : "Create account"}
           </button>
         </form>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-zinc-200 dark:border-zinc-700" />
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-white px-2 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+              or continue with
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void handleSolanaLogin()}
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+        >
+          <span aria-hidden="true">◎</span>
+          Sign in with Solana
+        </button>
+        <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
+          Uses your Solana wallet (Phantom). No email needed.
+        </p>
 
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
           {mode === "sign-in" ? (
