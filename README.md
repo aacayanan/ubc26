@@ -174,6 +174,14 @@ and Solana modules.
 
 The shared package contains reusable TypeScript definitions.
 
+API routes and background jobs use the server error convention in
+`apps/web/lib/server/errors/app-error.ts`. API failures use the shared
+response handler in `apps/web/lib/server/http/api-error.ts`; background
+jobs use `runBackgroundTask` in `apps/web/lib/server/background/task.ts`.
+Correlation IDs join related API and background logs. Structured logs
+automatically redact credential-like fields and private evaluation
+fields such as prompts and generated-code output.
+
 ## Security
 
 Private API keys must remain on the server.
