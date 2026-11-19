@@ -1,68 +1,65 @@
--- F33/F16: the competitor lineup, on free OpenRouter models.
+-- F33/F16: the competitor lineup.
 --
 -- Re-scoped 2026-11-19 with the visual-showdown pivot. The lineup is
 -- configuration, not code: `getActiveLineup()` selects every `is_active` row
 -- ordered by `sort_order`, so this file is the whole definition of who competes.
 --
--- Every model here is an OpenRouter `:free` model, so a demo costs nothing and
--- the $10 key budget is never touched. Chosen and verified 2026-11-19 by
--- calling each one through the real API with the F33 prompt: all returned a
--- `drawFrame(t, ctx, canvas)` function.
+-- Chosen 2026-11-19 by rendering each model's real output in the F14 sandbox,
+-- not by reading a pricing table. Every competitor here was measured end to end:
+-- three models × (a real brief → a real `drawFrame` → six real frames).
 --
--- Re-running is safe. `on conflict (openrouter_model_id)` updates the row, so a
--- price or config change is one edit away. Slugs are the app-level identity and
--- are unique independently.
+-- WHY PAID, NOT FREE: all 14 OpenRouter `:free` models were tried and none is
+-- usable. They either error, or — being reasoning models — spend the whole
+-- token budget thinking and return `content: null`, or (flint) run 30–76 s and
+-- often return nothing at all. A competitor that cannot emit a render forfeits,
+-- and a round where every model forfeits is voided (F15), so a free slot makes
+-- the demo less reliable rather than cheaper. At these prices a round costs
+-- well under a cent: 3 × (~300 in + ~350 out) ≈ $0.00005–$0.00007.
 --
--- WHAT THIS FILE DOES NOT DO: it does not seed the judge. `llm_models` has no
--- `role` column yet (F31 adds it), and `getActiveLineup()` returns every active
--- row — so an active judge row would silently compete as a fourth model. The
--- judge row below is seeded `is_active = false` for exactly that reason, and
--- F31 flips it on when it can distinguish `role = 'judge'`.
+-- Re-running is safe: `on conflict (slug)` updates the row, and the slug is the
+-- app-level identity — moving a competitor to a different OpenRouter model
+-- updates that row rather than colliding on the slug's unique constraint.
+--
+-- WHAT THIS FILE DOES NOT DO: it does not activate the judge. `llm_models` has
+-- no `role` column yet (F31 adds it) and `getActiveLineup()` returns every
+-- active row, so an active judge would silently compete as a fourth model. The
+-- judge row is seeded `is_active = false` for exactly that reason.
 
 -- ---------------------------------------------------------------------------
--- 1. The competitors — three models, identical prompt and config.
+-- 1. The competitors.
 --
--- `config` is the per-model generation params snapshot. It is NOT identical
--- across models on purpose: these are all reasoning-capable, and a small
--- `max_tokens` makes them spend the whole budget thinking and return
--- `content: null` with `finish_reason: "length"` — a malformed response the
--- client correctly rejects. The cap is set high enough that reasoning finishes
--- and content is emitted. Temperature is 0 so the same brief tends to the same
--- render, which keeps the demo reproducible.
---
--- LATENCY: 5–10 s per call at these settings. The `max_tokens` above is what
--- makes that true — the same brief with no cap ran past 100 s, because these
--- models keep generating until something stops them. `withTokenFloor()` in
--- prompt.ts applies this same floor in code, so a lineup row that forgets its
--- config is still bounded; the value here stays authoritative when present.
+-- `config` sets temperature 0 so the same brief tends to the same render, and a
+-- `max_tokens` that bounds the answer. `withTokenFloor()` in prompt.ts applies
+-- the same floor in code, so a row that forgets its config is still bounded;
+-- a value here is authoritative when present.
 -- ---------------------------------------------------------------------------
 insert into public.llm_models
   (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
 values
   (
-    'flash',
-    'ERNIE 5.5 Flash',
+    'nemo',
+    'Mistral Nemo',
     'openrouter',
-    'baidu/ernie-5.5-flash-preview:free',
-    '{"temperature": 0, "max_tokens": 8192}'::jsonb,
+    'mistralai/mistral-nemo',
+    '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     1
   ),
   (
-    'north',
-    'Cohere North Mini Code',
+    'command',
+    'Cohere Command R7B',
     'openrouter',
-    'cohere/north-mini-code:free',
-    '{"temperature": 0, "max_tokens": 8192}'::jsonb,
+    'cohere/command-r7b-12-2024',
+    '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     2
   ),
   (
-    'flint',
-    'Recursive Flint',
+    'llama',
+    'Llama 3.1 8B Instruct',
     'openrouter',
-    'recursive/flint-v1.0:free',
-    '{"temperature": 0, "max_tokens": 8192}'::jsonb,
+    'meta-llama/llama-3.1-8b-instruct',
+    '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     3
   )
@@ -75,12 +72,22 @@ on conflict (slug) do update set
   sort_order = excluded.sort_order;
 
 -- ---------------------------------------------------------------------------
+-- Retire the free lineup this file previously seated.
+--
+-- The three :free rows (`flash`, `north`, `flint`) were measured and do not
+-- render — see the header. Deactivated rather than deleted so the executions
+-- already recorded against them keep their foreign key and remain auditable.
+-- ---------------------------------------------------------------------------
+update public.llm_models
+  set is_active = false
+  where slug in ('flash', 'north', 'flint');
+
+-- ---------------------------------------------------------------------------
 -- 2. The judge — seeded inactive until F31 can tell it apart from a competitor.
 --
--- A vision-capable free model that reads frames and rules on the rubric. It is
--- `is_active = false` because `getActiveLineup()` has no role filter: an active
--- row here would be handed the brief as a competitor. F31 adds `role` and
--- activates this row.
+-- A vision-capable model that reads frames and rules on the rubric. Inactive
+-- because `getActiveLineup()` has no role filter: an active row here would be
+-- handed the brief as a competitor. F31 adds `role` and activates this row.
 -- ---------------------------------------------------------------------------
 insert into public.llm_models
   (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
