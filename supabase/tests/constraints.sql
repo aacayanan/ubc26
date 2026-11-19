@@ -330,7 +330,7 @@ select pg_temp.assert_fails(
 -- ---------------------------------------------------------------------------
 select pg_temp.assert_fails(
   'duplicate challenge (slug, version)',
-  $sql$insert into public.challenges (slug, version, title, prompt, status) values ('c-pub', 1, 'Dup', 'Dup.', 'published')$sql$,
+  $sql$insert into public.challenges (slug, version, title, prompt, status, entry_point) values ('c-pub', 1, 'Dup', 'Dup.', 'published', 'solve')$sql$,
   '23505');
 
 select pg_temp.assert_fails(

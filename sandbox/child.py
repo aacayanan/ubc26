@@ -18,7 +18,9 @@ import sys
 # already capped. Values are (resource, limit) with soft == hard.
 LIMITS = (
     (resource.RLIMIT_AS, 128 * 1024 * 1024),  # address space: memory bombs
-    (resource.RLIMIT_FSIZE, 64 * 1024),  # largest file written
+    # Above the harness's capture cap so a truncated capture is detectable
+    # rather than silently exactly the cap.
+    (resource.RLIMIT_FSIZE, 1024 * 1024),  # largest file written
     (resource.RLIMIT_NOFILE, 32),  # file descriptors
     (resource.RLIMIT_NPROC, 8),  # processes and threads
     (resource.RLIMIT_CORE, 0),  # no core dumps into the tmpfs

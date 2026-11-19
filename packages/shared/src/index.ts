@@ -89,6 +89,9 @@ export interface SandboxTestRecord {
   /** Raw child stdout/stderr, already truncated in-container. */
   stdout: string;
   stderr: string;
+  /** True when the stream exceeded the capture cap and was cut. */
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
   /** Exit status of the child process; null when it never started. */
   exitCode: number | null;
   durationMs: number;

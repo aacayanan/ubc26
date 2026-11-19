@@ -81,7 +81,11 @@ def child_preexec():
 
     limits = (
         (resource.RLIMIT_AS, 128 * 1024 * 1024),
-        (resource.RLIMIT_FSIZE, 64 * 1024),
+        # Above MAX_CAPTURE_BYTES on purpose: if the file cap equalled the
+        # capture cap, a flooded stream would fill exactly the cap and the read
+        # could not tell it had been cut. This way the harness sees a file
+        # larger than it reads and can report stdoutTruncated honestly.
+        (resource.RLIMIT_FSIZE, 1024 * 1024),
         (resource.RLIMIT_NOFILE, 32),
         (resource.RLIMIT_NPROC, 8),
         (resource.RLIMIT_CORE, 0),
@@ -186,8 +190,9 @@ def classify_failure(exit_code, stderr_text):
 def run_test(ordinal, args, timeout_ms, entry_point):
     """Run one test case and return its record."""
     result_path = f"/tmp/result-{ordinal}.json"
-    output_path = f"/tmp/output-{ordinal}.txt"
-    for path in (result_path, output_path):
+    stdout_path = f"/tmp/stdout-{ordinal}.txt"
+    stderr_path = f"/tmp/stderr-{ordinal}.txt"
+    for path in (result_path, stdout_path, stderr_path):
         try:
             os.unlink(path)
         except OSError:
@@ -197,9 +202,16 @@ def run_test(ordinal, args, timeout_ms, entry_point):
     status = "returned"
     value = None
     exit_code = None
+    stdout_truncated = False
+    stderr_truncated = False
 
     try:
-        with open(output_path, "wb") as sink:
+        # Separate files, not pipes: a pipe lets a flooding solution OOM the
+        # harness and an unread pipe deadlocks it. Separate files keep the two
+        # streams distinguishable, which matters for debugging a failure.
+        with open(stdout_path, "wb") as out_sink, open(
+            stderr_path, "wb"
+        ) as err_sink:
             process = subprocess.Popen(
                 [
                     sys.executable,
@@ -212,8 +224,8 @@ def run_test(ordinal, args, timeout_ms, entry_point):
                     result_path,
                 ],
                 stdin=subprocess.DEVNULL,
-                stdout=sink,
-                stderr=sink,
+                stdout=out_sink,
+                stderr=err_sink,
                 cwd="/tmp",
                 start_new_session=True,
                 preexec_fn=child_preexec,
@@ -233,17 +245,15 @@ def run_test(ordinal, args, timeout_ms, entry_point):
                 # -9, but when it was reaped out of band the status is None.
                 # Record the kill explicitly so a timeout never reads as 0.
                 exit_code = (
-                    process.returncode
-                    if process.returncode not in (None, 0)
-                    else -9
+                    process.returncode if process.returncode not in (None, 0) else -9
                 )
     except Exception:
         status = "error"
         exit_code = None
 
     duration_ms = int((time.monotonic() - started) * 1000)
-    stdout_text, stdout_truncated = read_bounded(output_path)
-    stderr_text = stdout_text
+    stdout_text, stdout_truncated = read_bounded(stdout_path)
+    stderr_text, stderr_truncated = read_bounded(stderr_path)
 
     if status == "returned":
         if exit_code != 0:
@@ -265,9 +275,10 @@ def run_test(ordinal, args, timeout_ms, entry_point):
     if status == "timeout":
         failure_kind = "timeout"
     elif status == "error":
+        # The child's traceback lives on stderr; stdout may hold its prints.
         failure_kind = classify_failure(exit_code, stderr_text)
 
-    for path in (result_path, output_path):
+    for path in (result_path, stdout_path, stderr_path):
         try:
             os.unlink(path)
         except OSError:
@@ -280,13 +291,15 @@ def run_test(ordinal, args, timeout_ms, entry_point):
         "outcome": status,
         "stdout": stdout_text,
         "stderr": stderr_text,
+        "stdoutTruncated": stdout_truncated,
+        "stderrTruncated": stderr_truncated,
         "exitCode": exit_code,
         "durationMs": duration_ms,
         "failureKind": failure_kind,
     }
     if status == "returned":
         record["value"] = value
-    return record, stdout_truncated
+    return record
 
 
 def main():
@@ -339,7 +352,7 @@ def main():
             return 0
 
         timeout_ms = min(int(test.get("timeoutMs", 5000)), remaining_ms)
-        record, _ = run_test(
+        record = run_test(
             int(test["ordinal"]),
             test.get("args", []),
             timeout_ms,

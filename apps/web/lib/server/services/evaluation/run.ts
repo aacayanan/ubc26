@@ -243,9 +243,14 @@ function classifyExecution(
   records: SandboxTestRecord[],
   totalTests: number,
 ): ExecutionStatus {
+  if (container.unavailable) {
+    // Docker itself never produced a result: daemon down, image missing, binary
+    // absent. Infrastructure, not the model — F16/F15 apply a retry/forfeit
+    // policy to this, not a correctness verdict.
+    return "unavailable";
+  }
+
   if (container.exitCode === null) {
-    // No exit code means the docker client itself never produced a result:
-    // daemon down, image missing, binary absent.
     return "unavailable";
   }
 
