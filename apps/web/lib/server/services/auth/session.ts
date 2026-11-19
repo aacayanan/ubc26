@@ -4,6 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getServerSupabase } from "@/lib/server/integrations/supabase/server";
+import { ensureProfile } from "@/lib/server/services/profile/profile";
 
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   try {
@@ -23,6 +24,10 @@ export const requireUser = cache(async (): Promise<User> => {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // TODO(F6): profile sync + points read plug in here
+  // F6: repair a missing profile row before any page reads it. This is
+  // idempotent and costs one SELECT after the first signup; it does not run
+  // on the proxy path, so it never adds latency to unauthenticated requests.
+  await ensureProfile(user);
+
   return user;
 });
