@@ -28,7 +28,13 @@ values
 
 insert into public.users (id, display_name) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'Alice'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'Bob');
+  ('aaaaaaaa-0000-0000-0000-000000000002', 'Bob')
+on conflict (id) do update
+set display_name = excluded.display_name;
+
+update public.users
+set role = 'admin'
+where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 insert into public.llm_models (slug, name, openrouter_model_id) values
   ('model-a', 'Model A', 'org/model-a'),
@@ -122,6 +128,62 @@ begin
   raise exception 'FAIL: % — statement was accepted: %', p_desc, p_sql;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- F8 competition creation: validated, atomic, and opened for participation.
+-- ---------------------------------------------------------------------------
+select pg_temp.assert_ok('create and open competition',
+  $sql$select public.create_competition(
+    'r-f8',
+    (select id from public.challenges where slug = 'c-pub'),
+    array[
+      (select id from public.llm_models where slug = 'model-a'),
+      (select id from public.llm_models where slug = 'model-b')
+    ],
+    now(),
+    now() + interval '2 days',
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )$sql$);
+
+select pg_temp.assert_ok('created competition is open with selected models',
+  $sql$do $f8$
+  begin
+    if (select status from public.rounds where slug = 'r-f8') <> 'OPEN' then
+      raise exception 'competition was not opened';
+    end if;
+    if (select count(*) from public.round_models
+        where round_id = (select id from public.rounds where slug = 'r-f8')) <> 2 then
+      raise exception 'competition model participation is incomplete';
+    end if;
+  end;
+  $f8$$sql$);
+
+select pg_temp.assert_fails(
+  'draft challenges cannot be used to create competitions',
+  $sql$select public.create_competition(
+    'r-f8-draft',
+    (select id from public.challenges where slug = 'c-draft'),
+    array[
+      (select id from public.llm_models where slug = 'model-a'),
+      (select id from public.llm_models where slug = 'model-b')
+    ],
+    now(),
+    now() + interval '2 days',
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )$sql$,
+  '22023', '%challenge must be published%');
+
+select pg_temp.assert_fails(
+  'competition creation requires multiple unique models',
+  $sql$select public.create_competition(
+    'r-f8-duplicate-model',
+    (select id from public.challenges where slug = 'c-pub'),
+    array[(select id from public.llm_models where slug = 'model-a')],
+    now(),
+    now() + interval '2 days',
+    'aaaaaaaa-0000-0000-0000-000000000001'
+  )$sql$,
+  '22023', '%at least two participating models%');
 
 -- ---------------------------------------------------------------------------
 -- Predictions: uniqueness, round state, deadline, participating models

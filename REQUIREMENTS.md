@@ -115,7 +115,7 @@ only what users predict changes (a model, with a stake, instead of three
 categories).
 
 - F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states. **Done (2026-11-19)** — merged via #36.
-- F8. Admin/internal path to create a round (brief, participating models, prediction deadline).
+- F8. Admin/internal path to create a round (brief, participating models, prediction deadline). **Done (2026-11-19)** — role-aware admin dashboard/API, atomic validated competition creation, and OPEN competition discovery are implemented.
 - F9. Dashboard lists open rounds: brief preview, models, deadline countdown, live pool odds.
 - F10. Prediction submission: stake points on a model; server-side validation rejects late, duplicate or over-balance stakes. Only funded, non-practice accounts join live. **Enforcement gap:** M1 ships this as UI copy and a derived `funded` column only — the join endpoint must reject unfunded/practice accounts at the API layer, and RLS must scope inserts.
 - F11. Lock predictions at the deadline (transition to `LOCKED`), idempotent, survives restarts.

@@ -327,6 +327,11 @@ same transition rules through `public.transition_round(...)`, a
 compare-and-set RPC that creates auditable lifecycle events and has
 retry-safe same-status behavior.
 
+Administrators use the same Supabase login as regular users and are routed
+to `/admin`. The protected admin dashboard creates and opens competitions
+through the server-only `public.create_competition(...)` RPC; regular users
+see only OPEN competitions through `/api/competitions`.
+
 API routes and background jobs use the server error convention in
 `apps/web/lib/server/errors/app-error.ts`. API failures use the shared
 response handler in `apps/web/lib/server/http/api-error.ts`; background
