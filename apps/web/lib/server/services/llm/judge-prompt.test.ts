@@ -44,6 +44,16 @@ describe("parseJudgeReply", () => {
     expect(result.ruling.criteria[0].question).toBe("Is there a donut?");
   });
 
+  it("copies each criterion's weight from the rubric onto the verdict", () => {
+    // Weight is presentation data for the results view (F19): it comes from the
+    // rubric, never from the reply, so a judge cannot inflate its own answer.
+    const result = parseJudgeReply(reply(), RUBRIC);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.ruling.criteria.map((c) => c.weight)).toEqual([0.6, 0.4]);
+  });
+
   it("derives conformed from the criteria, not from the judge's field", () => {
     // The judge says conformed but marks a criterion failed. The criteria win:
     // a contradiction must not become a pass.

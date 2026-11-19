@@ -210,15 +210,20 @@ categories).
   OpenRouter model configured as a `llm_models` row with `role = 'judge'`;
   given the brief and sampled frames, returns a structured conformance
   verdict (pass/fail and reason per criterion). Same client and retry/forfeit
-  rules, separate `run_type = 'judge'` rows. **Minimal integration done
-  (2026-11-19, under F17)** — `services/llm/judge.ts` + `llm/judge-prompt.ts`:
-  the judge is resolved by role (never a hard-coded ID), samples frames evenly
-  across the loop, and stores a per-criterion ruling in `judge_verdicts`.
-  `conformed` is derived from the criteria; a reply that is not the expected
-  object is a typed `unavailable`, never a silent pass or fail. The seed
-  activates the judge row and `getActiveLineup()` filters it out of the lineup.
-  Left for the issue: rubric-weight presentation and an operator re-judge
-  endpoint.
+  rules, separate `run_type = 'judge'` rows. **Done (2026-11-19)** —
+  `services/llm/judge.ts` + `llm/judge-prompt.ts`: the judge is resolved by
+  role (never a hard-coded ID), samples frames evenly across the loop, and
+  stores a per-criterion ruling in `judge_verdicts`; `conformed` is derived
+  from the criteria and a reply that is not the expected object is a typed
+  `unavailable`, never a silent pass or fail. Each criterion's rubric **weight**
+  is copied onto the stored verdict (and surfaced in `live-progress`) so the
+  results view can present how much each answer counted. **Re-judging on stored
+  frames** is `services/pipeline/rejudge.ts` + `POST /api/internal/jobs/rejudge`
+  (internal-secret gated): it re-reads each competitor's stored artifact and
+  re-asks the judge without re-generating or re-rendering, obeying the same
+  fences (locked-round only, failed gate never judged) and replacing rather than
+  stacking a ruling; it writes verdicts and does not settle. Tests in
+  `judge-prompt.test.ts`, `rejudge.test.ts`.
 - F18. **Parimutuel scoring & settlement** _(re-scoped 2026-11-19)_: compute
   the pool, resolve the conformance outcome, split the pool proportionally
   among backers of the winning model, and award fan-favorite points.

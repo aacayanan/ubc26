@@ -254,6 +254,56 @@ with a plain-language reason, and the round's single outcome lands in
 `round_outcomes`. Both are immutable once the round is finalized. Assertions:
 `supabase/tests/f15_outcomes.sql`.
 
+## Judging (F31)
+
+Conformance is decided by a vision model the pipeline resolves by role, never by
+a hard-coded ID: the judge is whichever active `llm_models` row has
+`role = 'judge'` (at most one, by a partial unique index). It reuses the F16
+OpenRouter client, so retries, timeouts and typed failures behave exactly as
+they do for a competitor; each call is its own `model_executions` row with
+`run_type = 'judge'` and `subject_model_id` set to the model being judged.
+
+`services/llm/judge.ts` and `llm/judge-prompt.ts` build the request and parse the
+reply. The design choices that keep a ruling trustworthy:
+
+- **The rubric is data.** Criteria (`id`, `question`, `weight`) come from the
+  brief row, and each criterion's weight is copied onto the stored verdict so
+  the results view can present how much each answer counted.
+- **`conformed` is derived, not asserted.** The parser computes it as the
+  conjunction of the per-criterion answers, so a reply that says "conformed" but
+  marks a criterion failed cannot become a pass. A reply missing or inventing a
+  criterion is rejected outright, because a partial ruling would make
+  `conformed` mean something different for each model.
+- **A non-answer is a typed failure.** A provider failure or an unreadable reply
+  is `unavailable` — a retryable non-verdict — never a silent pass or fail.
+
+Rulings land in `judge_verdicts` (one per subject per round, criteria stored
+structurally). Judging re-reads **stored** frames, so it never needs to
+re-generate or re-render.
+
+### Re-judging on stored frames
+
+The F17 pipeline reuses an existing verdict on a resume, which keeps a crash from
+re-spending judge calls — but it leaves no way to re-run judging after the fact.
+`services/pipeline/rejudge.ts` is that path, exposed as an internal job:
+
+```bash
+curl -X POST https://<host>/api/internal/jobs/rejudge \
+  -H "x-internal-job-secret: $INTERNAL_JOB_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"roundId": "<uuid>"}'          # add "modelId": "<uuid>" for one model
+```
+
+It reads each competitor's stored artifact, skips anything that was never
+judgeable (a failed gate, a render outage, a model that never generated), and
+asks the seated judge again — replacing the subject's ruling rather than
+stacking a new one. It obeys the same fences as the pipeline: a round that has
+not locked or is already finalized is refused (409), and a failed gate is never
+sent to the judge (non-negotiable #9). A judge outage during a re-judge stays a
+typed `unavailable`. It writes `judge_verdicts` and does **not** settle: F15's
+resolver and F18's settlement consume the verdicts separately, so re-judging
+cannot move a pot on its own.
+
 ## Deadline locking (F11)
 
 This is the "betting window" clock from the [two-clocks

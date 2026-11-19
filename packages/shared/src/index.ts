@@ -257,6 +257,12 @@ export interface StoredChunk {
 export interface JudgeCriterionVerdict {
   id: string;
   question: string;
+  /**
+   * The criterion's weight from the brief's rubric, copied onto the verdict so
+   * the results view can present how much each answer counted without having to
+   * re-read a brief that may since have been re-versioned (F19).
+   */
+  weight: number;
   passed: boolean;
   reason: string;
 }

@@ -305,6 +305,32 @@ begin
   if (select count(*) from public.judge_verdicts where round_id = v_round) <> 2 then
     raise exception 'FAIL: the round did not record two rulings';
   end if;
+
+  -- A re-judge replaces the subject's ruling rather than stacking one: the
+  -- operator re-judge (F31) targets the existing (round, subject) row, and the
+  -- per-criterion weights it stores stay a JSON array the results view reads.
+  perform pg_temp.assert_ok('a re-judge updates the existing subject ruling',
+    format($q$insert into public.judge_verdicts (execution_id, round_id,
+      subject_model_id, verdict, reason, criteria)
+      values (%L, %L, %L, 'not_conformed', 'Re-judged.',
+        '[{"id":"subject","question":"Is it a donut?","weight":0.6,
+           "passed":false,"reason":"Blank."}]'::jsonb)
+      on conflict (execution_id) do update set
+        verdict = excluded.verdict, reason = excluded.reason,
+        criteria = excluded.criteria$q$, v_exec, v_round, v_subject));
+
+  if (select verdict from public.judge_verdicts
+        where round_id = v_round and subject_model_id = v_subject) <> 'not_conformed' then
+    raise exception 'FAIL: the re-judge did not replace the ruling';
+  end if;
+
+  perform pg_temp.assert_fails('verdict criteria must be an array',
+    format($q$insert into public.judge_verdicts (execution_id, round_id,
+      subject_model_id, verdict, reason, criteria)
+      values (%L, %L, %L, 'conformed', 'x', '{}'::jsonb)
+      on conflict (execution_id) do update set criteria = excluded.criteria$q$,
+      v_exec, v_round, v_subject),
+    '23514');
 end;
 $$;
 
