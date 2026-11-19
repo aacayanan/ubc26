@@ -30,12 +30,11 @@
 -- and content is emitted. Temperature is 0 so the same brief tends to the same
 -- render, which keeps the demo reproducible.
 --
--- LATENCY: measured 6–8 s per call on an idle free tier, but a free model is
--- queued behind other users and a single request was observed timing out at
--- 90 s twice in a row. That is provider congestion, not a model fault, and the
--- F16 client retries it — but the demo budget is 2–3 minutes end to end, so
--- OPENROUTER_TIMEOUT_MS and OPENROUTER_MAX_ATTEMPTS should be revisited before
--- the recording. See REQUIREMENTS.md open item 2.
+-- LATENCY: 5–10 s per call at these settings. The `max_tokens` above is what
+-- makes that true — the same brief with no cap ran past 100 s, because these
+-- models keep generating until something stops them. `withTokenFloor()` in
+-- prompt.ts applies this same floor in code, so a lineup row that forgets its
+-- config is still bounded; the value here stays authoritative when present.
 -- ---------------------------------------------------------------------------
 insert into public.llm_models
   (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
