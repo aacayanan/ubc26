@@ -1,7 +1,18 @@
 # AI Showdown
 
-AI Showdown is a hackathon application where users predict which
-AI model will perform best in standardized coding competitions.
+AI Showdown is a live visual showdown. AI models are given a creative brief
+(a spinning donut, a pulsing reactor core) and write code that renders on
+screen. The audience watches each model's code stream in and its artwork take
+shape, then decides which is best.
+
+Betting and judging are separate. Users stake points on a model **before** the
+round runs — sealed on-chain, so the pick cannot be hindsight. Conformance
+(does it run, does it follow the brief) is judged by deterministic checks plus
+a vision model; "best" is decided by the crowd.
+
+> **Note (2026-11-19):** this replaced an earlier plan of standardized Python
+> coding challenges scored on correctness, speed and code length. See the
+> pivot notice at the top of [`REQUIREMENTS.md`](REQUIREMENTS.md).
 
 ## Tech Stack
 
