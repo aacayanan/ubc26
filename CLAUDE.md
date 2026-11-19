@@ -101,6 +101,9 @@ The web app has a committed design system; do not restyle pages ad hoc.
 - The hero is a three.js flow field (`components/vortex-field.tsx`). Keep
   its `prefers-reduced-motion` still frame, its CSS underlay fallback,
   and its off-screen pause.
+- Copy carries the post-pivot vocabulary — brief, render, conformance,
+  crowd vote, stake. The retired accuracy / speed / code-length wording
+  must not return.
 - Demo data on the landing page is labelled synthetic. Never add
   fabricated users, win rates, testimonials or benchmarks.
 
