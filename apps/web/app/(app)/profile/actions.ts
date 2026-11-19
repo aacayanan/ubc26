@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logger } from "@/lib/server/logging/logger";
 import { requireUser } from "@/lib/server/services/auth/session";
 import { updateDisplayName } from "@/lib/server/services/profile/update";
 
@@ -30,12 +31,12 @@ export async function saveDisplayName(
       value: saved ?? "",
     };
   } catch (error) {
+    logger.error("profile.display_name.save_failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       ok: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Could not save your display name.",
+      message: "Could not save your display name. Try again.",
       value,
     };
   }

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/server/services/auth/session";
+import { ArrowRight } from "@/components/icons";
 import SignOutButton from "@/components/sign-out-button";
+import { getCurrentUser } from "@/lib/server/services/auth/session";
 
 interface HeaderUserAreaProps {
   variant: "marketing" | "app";
@@ -11,25 +12,23 @@ export default async function HeaderUserArea({ variant }: HeaderUserAreaProps) {
 
   if (!user) {
     return (
-      <Link
-        href="/login"
-        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-      >
+      <Link href="/login" className="btn btn-primary btn-sm">
         Sign in
+        <ArrowRight className="size-3.5 opacity-60" />
       </Link>
     );
   }
 
   const initial = (user.email?.[0] ?? "U").toUpperCase();
-  const name = user.email?.split("@")[0];
+  const name = user.email?.split("@")[0] ?? "account";
   const nameClass =
-    "min-w-0 max-w-28 truncate text-sm text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50";
+    "hidden max-w-28 truncate text-[0.8125rem] text-muted transition-colors hover:text-ink sm:block";
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5">
       <span
         aria-hidden="true"
-        className="hidden size-7 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700 sm:flex dark:bg-zinc-800 dark:text-zinc-300"
+        className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-white/[0.05] text-[0.6875rem] font-medium tracking-wide text-ink"
       >
         {initial}
       </span>

@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
+import { EmptyState, PageHeader, Panel } from "@/components/ui";
+
 interface ResultEntry {
-  competition_id: string;
-  competition_title: string;
-  status: string;
-  accuracy_winner: string | null;
-  speed_winner: string | null;
-  length_winner: string | null;
+  round_id: string;
+  brief_title: string;
+  conformed_model: string | null;
+  crowd_model: string | null;
+  pool_points: number;
   settled_at: string;
 }
 
@@ -15,68 +17,66 @@ export default function ResultsPage() {
   const results: ResultEntry[] = [];
 
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-3xl">
-        <h1 className="mb-6 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Competition Results
-        </h1>
+    <div className="shell py-14 sm:py-16">
+      <PageHeader
+        title="Results"
+        description="Every settled round keeps its two outcomes separate: which model conformed to the brief, and which one the crowd named best."
+      />
 
+      <div className="mt-10">
         {results.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No results yet. Results will appear after each competition
-              settles.
-            </p>
-          </div>
+          <EmptyState
+            title="Nothing has settled yet."
+            action={
+              <Link href="/competitions" className="btn btn-ghost btn-sm">
+                Browse rounds
+              </Link>
+            }
+          >
+            A round lands here once its renders are judged, the vote has closed
+            and the pool has been split.
+          </EmptyState>
         ) : (
-          <div className="space-y-4">
+          <ul className="grid gap-3">
             {results.map((r) => (
-              <div
-                key={r.competition_id}
-                className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div className="flex items-start justify-between">
-                  <h2 className="text-base font-medium text-zinc-900 dark:text-zinc-50">
-                    {r.competition_title}
-                  </h2>
-                  <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                    Settled
-                  </span>
-                </div>
+              <li key={r.round_id}>
+                <Panel className="p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <h2 className="t-title text-[1.0625rem] text-ink">
+                      {r.brief_title}
+                    </h2>
+                    <span className="t-mono text-[0.625rem] text-faint">
+                      {new Date(r.settled_at).toLocaleString()}
+                    </span>
+                  </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                      Accuracy
-                    </p>
-                    <p className="mt-0.5 text-sm font-semibold text-blue-700 dark:text-blue-300">
-                      {r.accuracy_winner || "—"}
-                    </p>
+                  <div className="mt-5 grid gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-2">
+                    <div className="bg-void-2/80 px-5 py-4">
+                      <p className="t-label text-[0.5625rem] text-faint">
+                        Conformed
+                      </p>
+                      <p className="mt-1.5 text-[1rem] text-ink">
+                        {r.conformed_model ?? "No model conformed"}
+                      </p>
+                    </div>
+                    <div className="bg-void-2/80 px-5 py-4">
+                      <p className="t-label text-[0.5625rem] text-faint">
+                        Crowd&rsquo;s choice
+                      </p>
+                      <p className="mt-1.5 text-[1rem] text-ink">
+                        {r.crowd_model ?? "—"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-green-50 px-3 py-2 dark:bg-green-900/20">
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      Speed
-                    </p>
-                    <p className="mt-0.5 text-sm font-semibold text-green-700 dark:text-green-300">
-                      {r.speed_winner || "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-purple-50 px-3 py-2 dark:bg-purple-900/20">
-                    <p className="text-xs text-purple-600 dark:text-purple-400">
-                      Code Length
-                    </p>
-                    <p className="mt-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
-                      {r.length_winner || "—"}
-                    </p>
-                  </div>
-                </div>
 
-                <p className="mt-3 text-xs text-zinc-400">
-                  Settled {new Date(r.settled_at).toLocaleString()}
-                </p>
-              </div>
+                  <p className="t-body mt-4 text-xs text-faint">
+                    Pool split: {r.pool_points.toLocaleString()} pts, pro-rata
+                    among backers of the conforming model.
+                  </p>
+                </Panel>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>

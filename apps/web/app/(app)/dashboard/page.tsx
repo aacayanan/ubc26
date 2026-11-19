@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight } from "@/components/icons";
 import PracticeBadge from "@/components/practice-badge";
+import {
+  EmptyState,
+  PageHeader,
+  Panel,
+  Readout,
+  SectionHeading,
+  Status,
+} from "@/components/ui";
 import { NotFoundError } from "@/lib/server/errors/app-error";
 import { getCorrelationId } from "@/lib/server/http/api-error";
 import { logger } from "@/lib/server/logging/logger";
@@ -9,81 +19,60 @@ import {
   type Profile,
 } from "@/lib/server/services/profile/profile";
 
+export const metadata: Metadata = { title: "Dashboard" };
+
 const QUICK_LINKS = [
-  { href: "/competitions", label: "Competitions" },
-  { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/predictions", label: "My Predictions" },
-  { href: "/models", label: "Model Stats" },
-  { href: "/results", label: "Results" },
-  { href: "/profile", label: "Profile" },
+  {
+    href: "/competitions",
+    label: "Open rounds",
+    hint: "stake before the clock",
+  },
+  { href: "/predictions", label: "My predictions", hint: "sealed and settled" },
+  { href: "/leaderboard", label: "Leaderboard", hint: "season standings" },
+  { href: "/models", label: "Models", hint: "conformance by model" },
+  { href: "/results", label: "Results", hint: "every settled round" },
+  { href: "/profile", label: "Profile", hint: "identity and wallet" },
 ];
 
 function ProfileUnavailable() {
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-4xl space-y-4" role="alert">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Dashboard
-        </h1>
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400">
-          <p className="font-medium">Your profile could not be loaded.</p>
-          <p className="mt-1">
+    <div className="shell py-14 sm:py-16">
+      <div className="max-w-2xl" role="alert">
+        <PageHeader title="Dashboard" />
+        <Panel quiet className="mt-8 p-6">
+          <Status tone="amber">Account record missing</Status>
+          <p className="t-title mt-4 text-lg text-ink">
+            Your profile could not be loaded.
+          </p>
+          <p className="t-body mt-2 text-sm text-muted">
             You are signed in, but your account record is missing. Reload to
             retry the automatic repair, or sign out and back in.
           </p>
-        </div>
-        <div className="flex gap-3">
-          <Link
-            href="/dashboard"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
-            Reload
-          </Link>
-          <Link
-            href="/profile"
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            Go to profile
-          </Link>
-        </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/dashboard" className="btn btn-solid btn-sm">
+              Reload
+            </Link>
+            <Link href="/profile" className="btn btn-ghost btn-sm">
+              Go to profile
+            </Link>
+          </div>
+        </Panel>
       </div>
     </div>
   );
 }
 
-function StatTiles({ profile }: { profile: Profile }) {
-  const tiles = [
-    {
-      label: "Points",
-      value: profile.points,
-      color: "text-zinc-900 dark:text-zinc-50",
-    },
-    {
-      label: "Predictions",
-      value: profile.predictions,
-      color: "text-zinc-900 dark:text-zinc-50",
-    },
-    {
-      label: "Streak",
-      value: profile.currentStreak,
-      color: "text-zinc-900 dark:text-zinc-50",
-    },
-    {
-      label: "Best Streak",
-      value: profile.longestStreak,
-      color: "text-zinc-900 dark:text-zinc-50",
-    },
-  ];
-
+function InstrumentStrip({ profile }: { profile: Profile }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {tiles.map((s) => (
-        <div
-          key={s.label}
-          className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-        >
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{s.label}</p>
-          <p className={`mt-1 text-2xl font-bold ${s.color}`}>{s.value}</p>
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[18px] border border-hairline bg-hairline shadow-[0_28px_70px_-34px_rgb(0_0_0/0.95)] backdrop-blur-xl sm:grid-cols-4">
+      {[
+        { label: "Points", value: profile.points.toLocaleString() },
+        { label: "Predictions", value: profile.predictions },
+        { label: "Streak", value: profile.currentStreak },
+        { label: "Best streak", value: profile.longestStreak },
+      ].map((s) => (
+        <div key={s.label} className="bg-[rgb(11_9_18/0.62)] px-5 py-5">
+          <Readout label={s.label} value={s.value} />
         </div>
       ))}
     </div>
@@ -110,95 +99,111 @@ export default async function DashboardPage() {
   const greeting = profile.displayName ?? user.email?.split("@")[0] ?? "there";
 
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-4xl space-y-8">
+    <div className="shell py-12 sm:py-14">
+      <div className="space-y-10">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="t-title text-[clamp(1.7rem,3.2vw,2.25rem)] text-ink">
               Welcome back, {greeting}
             </h1>
-            {profile.practiceMode && <PracticeBadge label="Practice" />}
-            {!profile.funded && <PracticeBadge label="No wallet" />}
+            {!profile.funded ? (
+              <PracticeBadge label="No wallet" />
+            ) : profile.practiceMode ? (
+              <PracticeBadge label="Practice" />
+            ) : null}
           </div>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Your prediction platform at a glance.
+          <p className="t-body mt-2 text-sm text-muted">
+            Your side of the arena at a glance.
           </p>
         </div>
 
-        {!profile.funded && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-            <span className="font-medium">No Solana account linked.</span> You
-            can browse rounds and watch results, but joining a round needs a
-            funded account (a linked Solana wallet).{" "}
-            <Link
-              href="/link-wallet"
-              className="font-medium underline underline-offset-4"
-            >
+        {!profile.funded ? (
+          <Panel
+            quiet
+            className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4"
+          >
+            <Status tone="amber">No Solana account</Status>
+            <p className="t-body flex-1 text-[0.8125rem] text-muted">
+              You can browse rounds, watch renders and vote — staking on a live
+              round needs a linked Solana wallet.
+            </p>
+            <Link href="/link-wallet" className="btn btn-ghost btn-sm">
               Link a wallet
             </Link>
-          </div>
-        )}
+          </Panel>
+        ) : null}
 
-        {profile.funded && profile.practiceMode && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-            <span className="font-medium">Practice mode.</span> Your Solana
-            account is linked, but you&apos;re in paper mode — no prompt session
-            starts when you join a round.{" "}
-            <Link
-              href="/link-wallet"
-              className="font-medium underline underline-offset-4"
-            >
+        {profile.funded && profile.practiceMode ? (
+          <Panel
+            quiet
+            className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4"
+          >
+            <Status tone="amber">Practice mode</Status>
+            <p className="t-body flex-1 text-[0.8125rem] text-muted">
+              Your wallet is linked, but you are in practice mode — you can
+              browse, watch and vote, but no stake is placed.
+            </p>
+            <Link href="/link-wallet" className="btn btn-ghost btn-sm">
               Switch to live
             </Link>
-          </div>
-        )}
+          </Panel>
+        ) : null}
 
-        <StatTiles profile={profile} />
+        <InstrumentStrip profile={profile} />
 
-        {/* Active competitions */}
-        <div>
-          <h2 className="mb-3 text-base font-medium text-zinc-900 dark:text-zinc-50">
-            Active Competitions
-          </h2>
-          <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-10 text-center dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No active competitions right now. Check back later or browse{" "}
-              <Link
-                href="/competitions"
-                className="font-medium text-zinc-700 underline hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
-              >
-                all competitions
+        <section>
+          <SectionHeading
+            aside={
+              <Link href="/results" className="link t-label text-[0.625rem]">
+                All results
               </Link>
-              .
-            </p>
-            <p className="mt-4">
-              <Link
-                href="/competitions"
-                className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                Place your first prediction
-              </Link>
-            </p>
+            }
+          >
+            Open rounds
+          </SectionHeading>
+          <div className="mt-4">
+            <EmptyState
+              title="No round is open right now."
+              action={
+                <Link href="/competitions" className="btn btn-ghost btn-sm">
+                  Browse rounds
+                </Link>
+              }
+            >
+              Rounds are opened by the operator. When the next brief drops it
+              appears here with its deadline and a live pool.
+            </EmptyState>
           </div>
-        </div>
+        </section>
 
-        {/* Quick links */}
-        <div>
-          <h2 className="mb-3 text-base font-medium text-zinc-900 dark:text-zinc-50">
-            Quick Links
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {QUICK_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <section>
+          <SectionHeading>Everything else</SectionHeading>
+          <Panel className="mt-4 overflow-hidden">
+            <ul className="grid sm:grid-cols-2">
+              {QUICK_LINKS.map((link) => (
+                <li
+                  key={link.href}
+                  className="border-b border-hairline last:border-0 sm:[&:nth-child(odd)]:border-r"
+                >
+                  <Link
+                    href={link.href}
+                    className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-white/[0.03]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[0.875rem] text-ink">
+                        {link.label}
+                      </span>
+                      <span className="t-mono block text-[0.625rem] text-faint">
+                        {link.hint}
+                      </span>
+                    </span>
+                    <ArrowRight className="size-4 text-muted transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-ink" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </section>
       </div>
     </div>
   );

@@ -1,42 +1,32 @@
 // Route-level Suspense fallback under cacheComponents: mirrors the real
-// dashboard layout (header, 4 stat tiles, competitions box, quick links).
+// dashboard layout (header, instrument strip, rounds box, link list).
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-4xl space-y-8" aria-busy="true">
-        {/* Header */}
-        <div className="space-y-2">
-          <div className="h-7 w-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-          <div className="h-4 w-64 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+    <div className="shell py-12 sm:py-14" aria-busy="true" role="status">
+      <span className="sr-only">Loading your dashboard…</span>
+      <div className="space-y-10">
+        <div className="space-y-3">
+          <div className="skeleton h-8 w-56" />
+          <div className="skeleton h-4 w-64" />
         </div>
 
-        {/* Quick stats: 4 tiles */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[18px] border border-hairline bg-hairline sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-20 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800"
-            />
+            <div key={i} className="bg-[rgb(11_9_18/0.62)] px-5 py-5">
+              <div className="skeleton h-2.5 w-16" />
+              <div className="skeleton mt-2.5 h-6 w-20" />
+            </div>
           ))}
         </div>
 
-        {/* Active competitions box */}
-        <div className="space-y-3">
-          <div className="h-4 w-44 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-          <div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+        <div className="space-y-4">
+          <div className="skeleton h-4 w-32" />
+          <div className="skeleton h-40 w-full rounded-[18px]" />
         </div>
 
-        {/* Quick links */}
-        <div className="space-y-3">
-          <div className="h-4 w-32 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-12 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800"
-              />
-            ))}
-          </div>
+        <div className="space-y-4">
+          <div className="skeleton h-4 w-36" />
+          <div className="skeleton h-48 w-full rounded-[18px]" />
         </div>
       </div>
     </div>

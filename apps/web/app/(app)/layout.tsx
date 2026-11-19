@@ -9,11 +9,12 @@ async function AuthGate({ children }: { children: React.ReactNode }) {
 
 function AppShellSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-      <div className="mb-6 h-8 w-48 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-      <div className="mb-4 h-4 w-full animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-      <div className="mb-4 h-4 w-3/4 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
-      <div className="h-40 w-full animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
+    <div className="shell py-12 sm:py-14" aria-busy="true" role="status">
+      <span className="sr-only">Loading…</span>
+      <div className="skeleton h-8 w-52" />
+      <div className="skeleton mt-3 h-4 w-72" />
+      <div className="skeleton mt-8 h-24 w-full rounded-[18px]" />
+      <div className="skeleton mt-3 h-40 w-full rounded-[18px]" />
     </div>
   );
 }
@@ -22,9 +23,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <SiteHeader variant="app" />
-      <Suspense fallback={<AppShellSkeleton />}>
-        <AuthGate>{children}</AuthGate>
-      </Suspense>
+      <main id="main" className="flex flex-1 flex-col">
+        <Suspense fallback={<AppShellSkeleton />}>
+          <AuthGate>{children}</AuthGate>
+        </Suspense>
+      </main>
     </>
   );
 }

@@ -7,13 +7,17 @@ import { getBrowserSupabase } from "@/lib/supabase/browser";
 export default function SignOutButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function handleSignOut() {
     setLoading(true);
+    setFailed(false);
     try {
       await getBrowserSupabase().auth.signOut();
       router.push("/");
       router.refresh();
+    } catch {
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -24,9 +28,13 @@ export default function SignOutButton() {
       type="button"
       onClick={handleSignOut}
       disabled={loading}
-      className="shrink-0 rounded-full border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-50"
+      className="btn btn-ghost btn-sm"
     >
-      {loading ? "Signing out…" : "Sign out"}
+      {loading
+        ? "Signing out…"
+        : failed
+          ? "Couldn’t sign out — retry"
+          : "Sign out"}
     </button>
   );
 }

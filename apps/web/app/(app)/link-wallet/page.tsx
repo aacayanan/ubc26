@@ -5,8 +5,16 @@ export default function LinkWalletPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-50" />
+        <div className="flex min-h-[calc(100svh-64px)] items-center justify-center px-5">
+          <div
+            className="panel w-full max-w-[420px] space-y-4 p-8"
+            aria-busy="true"
+          >
+            <div className="skeleton h-7 w-56" />
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-3/4" />
+            <div className="skeleton h-10 w-full rounded-full" />
+          </div>
         </div>
       }
     >

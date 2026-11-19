@@ -64,7 +64,7 @@ export function LoginForm() {
       }
       const { error } = await getBrowserSupabase().auth.signInWithWeb3({
         chain: "solana",
-        statement: "Sign in to AI Showdown to make predictions.",
+        statement: "Sign in to AI Showdown to stake on rounds.",
         wallet: window.solana,
       });
       if (error) throw error;
@@ -95,10 +95,7 @@ export function LoginForm() {
         if (error) throw error;
         finishAuth();
       } else {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (data.user && !data.session) {
           setNotice("Check your email to confirm your account, then sign in.");
@@ -117,129 +114,141 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-black">
-      <div className="w-full max-w-sm space-y-8 rounded-xl bg-white p-8 shadow-lg dark:bg-zinc-900">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            AI Showdown
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            {mode === "sign-in"
-              ? "Sign in to make predictions"
-              : "Create an account to start predicting"}
-          </p>
-        </div>
+    <div className="w-full max-w-[380px]">
+      <h1 className="t-title text-[1.75rem] text-ink">
+        {mode === "sign-in" ? "Sign in" : "Create an account"}
+      </h1>
+      <p className="t-body mt-2.5 text-sm text-muted">
+        {mode === "sign-in"
+          ? "Stake before the deadline, then watch the renders land."
+          : "Browse rounds right away. Link a wallet when you want to stake."}
+      </p>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-400">
-            {error}
-          </div>
-        )}
-
-        {notice && (
-          <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-            {notice}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-50"
-          >
-            {loading
-              ? mode === "sign-in"
-                ? "Signing in…"
-                : "Creating account…"
-              : mode === "sign-in"
-                ? "Sign in"
-                : "Create account"}
-          </button>
-        </form>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-zinc-200 dark:border-zinc-700" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-white px-2 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-              or continue with
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void handleSolanaLogin()}
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+      {error ? (
+        <p
+          id="auth-error"
+          role="alert"
+          className="mt-6 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3.5 py-2.5 text-[0.8125rem] text-magenta"
         >
-          <span aria-hidden="true">◎</span>
-          Sign in with Solana
-        </button>
-        <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
-          Uses your Solana wallet (Phantom). No email needed.
+          {error}
         </p>
+      ) : null}
 
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-          {mode === "sign-in" ? (
-            <>
-              Don&apos;t have an account?{" "}
-              <button
-                type="button"
-                onClick={toggleMode}
-                className="font-medium text-zinc-900 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-300"
-              >
-                Create one
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button
-                type="button"
-                onClick={toggleMode}
-                className="font-medium text-zinc-900 underline underline-offset-4 hover:text-zinc-700 dark:text-zinc-50 dark:hover:text-zinc-300"
-              >
-                Sign in
-              </button>
-            </>
-          )}
+      {notice ? (
+        <p
+          role="status"
+          className="mt-6 rounded-lg border border-violet/30 bg-violet/[0.08] px-3.5 py-2.5 text-[0.8125rem] text-violet"
+        >
+          {notice}
         </p>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+        <div>
+          <label htmlFor="email" className="t-label mb-2 block text-faint">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "auth-error" : undefined}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="field"
+          />
+        </div>
+        <div>
+          <label htmlFor="password" className="t-label mb-2 block text-faint">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete={
+              mode === "sign-in" ? "current-password" : "new-password"
+            }
+            required
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "auth-error" : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="field"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn btn-solid btn-block"
+        >
+          {loading
+            ? mode === "sign-in"
+              ? "Signing in…"
+              : "Creating account…"
+            : mode === "sign-in"
+              ? "Sign in"
+              : "Create account"}
+        </button>
+      </form>
+
+      <div className="my-7 flex items-center gap-4">
+        <span aria-hidden="true" className="h-px flex-1 bg-hairline" />
+        <span className="t-label text-[0.5625rem] text-faint">or</span>
+        <span aria-hidden="true" className="h-px flex-1 bg-hairline" />
       </div>
+
+      <button
+        type="button"
+        onClick={() => void handleSolanaLogin()}
+        disabled={loading}
+        className="btn btn-primary btn-block"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          aria-hidden="true"
+        >
+          <path d="M6 15.5 8.5 8.5h9.5" strokeLinecap="round" />
+          <path d="M8.5 8.5 18 15.5H8" strokeLinecap="round" />
+          <circle cx="12" cy="12" r="9.2" opacity="0.35" />
+        </svg>
+        Sign in with Solana
+      </button>
+      <p className="t-body mt-3 text-center text-xs text-faint">
+        Uses your Phantom wallet. A wallet sign-in can stake on live rounds
+        immediately.
+      </p>
+
+      <p className="t-body mt-7 text-center text-sm text-muted">
+        {mode === "sign-in" ? (
+          <>
+            No account?{" "}
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="font-medium text-ink underline decoration-magenta/50 underline-offset-4 hover:decoration-magenta"
+            >
+              Create one
+            </button>
+          </>
+        ) : (
+          <>
+            Already have one?{" "}
+            <button
+              type="button"
+              onClick={toggleMode}
+              className="font-medium text-ink underline decoration-magenta/50 underline-offset-4 hover:decoration-magenta"
+            >
+              Sign in
+            </button>
+          </>
+        )}
+      </p>
     </div>
   );
 }
