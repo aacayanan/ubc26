@@ -81,6 +81,9 @@ export function roundTone(state: string): Tone {
       return "violet";
     case "SETTLED":
       return "ink";
+    case "VOIDED":
+      // A void is an honest non-result, not a failure of the show (F15).
+      return "amber";
     default:
       return "idle";
   }
@@ -98,12 +101,16 @@ export function roundLabel(state: string): string {
       return "Judging";
     case "SETTLED":
       return "Settled";
+    case "VOIDED":
+      return "Void";
     case "ARCHIVED":
       return "Archived";
     case "CANCELLED":
       return "Cancelled";
     case "FAILED":
       return "Failed";
+    case "RETRYING":
+      return "Retrying";
     default:
       return state;
   }
