@@ -49,6 +49,7 @@ export interface LiveModelProgress {
     criteria: Array<{
       id: string;
       question: string;
+      weight: number;
       passed: boolean;
       reason: string;
     }>;
@@ -219,13 +220,16 @@ export async function getLiveRoundProgress(
     judgeRows.set(row.subject_model_id, {
       verdict: row.verdict,
       reason: row.reason,
+      // Stored criteria carry their rubric weight (F31); older rows without one
+      // normalise to 0 rather than being dropped from a public response.
       criteria: Array.isArray(row.criteria)
-        ? (row.criteria as Array<{
-            id: string;
-            question: string;
-            passed: boolean;
-            reason: string;
-          }>)
+        ? (row.criteria as Array<Record<string, unknown>>).map((entry) => ({
+            id: typeof entry.id === "string" ? entry.id : "",
+            question: typeof entry.question === "string" ? entry.question : "",
+            weight: typeof entry.weight === "number" ? entry.weight : 0,
+            passed: entry.passed === true,
+            reason: typeof entry.reason === "string" ? entry.reason : "",
+          }))
         : [],
     });
   }

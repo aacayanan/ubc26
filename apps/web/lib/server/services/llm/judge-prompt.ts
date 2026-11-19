@@ -198,12 +198,14 @@ export function parseJudgeReply(
     }
 
     seen.add(item.id);
-    const question =
-      rubric.find((criterion) => criterion.id === item.id)?.question ?? "";
+    const criterion = rubric.find((entry) => entry.id === item.id);
 
     criteria.push({
       id: item.id,
-      question,
+      question: criterion?.question ?? "",
+      // The weight comes from the rubric, never from the reply — the judge is
+      // answering "did it pass?", not setting how much that answer counts.
+      weight: criterion?.weight ?? 0,
       passed: item.passed,
       reason: item.reason,
     });

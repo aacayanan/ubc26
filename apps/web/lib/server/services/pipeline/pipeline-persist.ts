@@ -156,6 +156,7 @@ export interface JudgeVerdictUpsert {
   criteria: Array<{
     id: string;
     question: string;
+    weight: number;
     passed: boolean;
     reason: string;
   }>;
@@ -197,12 +198,36 @@ export interface StoredJudgeVerdict {
   subjectModelId: string;
   verdict: "conformed" | "not_conformed" | "unavailable";
   reason: string;
-  criteria: Array<{
-    id: string;
-    question: string;
-    passed: boolean;
-    reason: string;
-  }>;
+  criteria: StoredCriterion[];
+}
+
+/** A stored per-criterion ruling, as the results and progress views read it. */
+export interface StoredCriterion {
+  id: string;
+  question: string;
+  /** Missing on rulings recorded before weights were stored; treated as 0. */
+  weight: number;
+  passed: boolean;
+  reason: string;
+}
+
+/**
+ * Read stored criteria defensively.
+ *
+ * Weights were added to the stored shape with F31; a verdict written before that
+ * has no `weight`, and a results view must still render it rather than throw on
+ * a public row. Normalising here means every reader sees the same shape.
+ */
+function toStoredCriteria(value: unknown): StoredCriterion[] {
+  if (!Array.isArray(value)) return [];
+
+  return (value as Array<Record<string, unknown>>).map((entry) => ({
+    id: typeof entry.id === "string" ? entry.id : "",
+    question: typeof entry.question === "string" ? entry.question : "",
+    weight: typeof entry.weight === "number" ? entry.weight : 0,
+    passed: entry.passed === true,
+    reason: typeof entry.reason === "string" ? entry.reason : "",
+  }));
 }
 
 /** The rulings recorded for a round, keyed for the resolver and results view. */
@@ -230,9 +255,7 @@ export async function listJudgeVerdicts(
     subjectModelId: row.subject_model_id,
     verdict: row.verdict,
     reason: row.reason,
-    criteria: Array.isArray(row.criteria)
-      ? (row.criteria as StoredJudgeVerdict["criteria"])
-      : [],
+    criteria: toStoredCriteria(row.criteria),
   }));
 }
 
@@ -272,8 +295,6 @@ export async function getJudgeVerdict(
     subjectModelId: row.subject_model_id,
     verdict: row.verdict,
     reason: row.reason,
-    criteria: Array.isArray(row.criteria)
-      ? (row.criteria as StoredJudgeVerdict["criteria"])
-      : [],
+    criteria: toStoredCriteria(row.criteria),
   };
 }
