@@ -281,22 +281,38 @@ export default function CompetitionDetailPage() {
             </div>
           ) : (
             <div className="text-center">
-              <Status tone="violet">{roundLabel(round.state)}</Status>
+              <Status
+                tone={
+                  round.state === "VOIDED"
+                    ? "amber"
+                    : round.state === "SETTLED" || round.state === "ARCHIVED"
+                      ? "ink"
+                      : "violet"
+                }
+              >
+                {roundLabel(round.state)}
+              </Status>
               <p className="t-title mt-5 text-lg text-ink">
                 {round.state === "SETTLED" || round.state === "ARCHIVED"
                   ? "This round has settled."
-                  : round.state === "CANCELLED" || round.state === "FAILED"
-                    ? "This round did not run."
-                    : "Staking is closed."}
+                  : round.state === "VOIDED"
+                    ? "This round was void."
+                    : round.state === "CANCELLED" || round.state === "FAILED"
+                      ? "This round did not run."
+                      : "Staking is closed."}
               </p>
               <p className="t-body mt-2 text-sm text-muted">
                 {round.state === "EVALUATING"
                   ? "Renders are in and the judge is ruling on conformance."
                   : round.state === "SETTLED" || round.state === "ARCHIVED"
                     ? "Its conformance result and the crowd's choice are recorded in Results."
-                    : round.state === "CANCELLED" || round.state === "FAILED"
-                      ? "No render ran, so every stake is void and its points return to the pool."
-                      : "The round has locked. Renders are being produced, and the crowd vote opens once they land."}
+                    : round.state === "VOIDED"
+                      ? "No model conformed to the brief, so no points moved. Every stake was returned."
+                      : round.state === "CANCELLED" || round.state === "FAILED"
+                        ? "No render ran, so every stake is void and its points return to the pool."
+                        : round.state === "RETRYING"
+                          ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
+                          : "The round has locked. Renders are being produced, and the crowd vote opens once they land."}
               </p>
               <Link href="/results" className="btn btn-ghost btn-block mt-6">
                 Results

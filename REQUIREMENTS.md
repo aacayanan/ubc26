@@ -159,6 +159,20 @@ categories).
 - F15. **Failure, tie and void behavior**: render error or timeout = forfeit;
   judge cannot see frames = `unavailable`; all models forfeit = round voided;
   ties at equal conformance resolved by the crowd's fan-favorite pool.
+  **Done (2026-11-19)** — `evaluation/outcome.ts` is the pure resolver
+  (`classifyModelOutcome` + `resolveRoundOutcome`): gate failure ⇒ forfeit, an
+  unavailable judge ⇒ unavailable and the round is retryable rather than
+  settled on a guess, a gate-passing off-brief render ⇒ `not_conformed` but
+  still fan-favorite eligible, all-forfeit ⇒ void, equal conformance ⇒ the
+  crowd vote (a tied vote resolves by fixed round order and records
+  `tie_break`). `evaluation/outcomes-persist.ts` writes `competition_results`
+  (category `conformance`) and one `round_outcomes` row per round. Migration
+  `20261119000300` adds the conformance `result_status` values, the
+  `conformance` prediction category, `predictions.settled_at`/
+  `settlement_outcome`, and the `ensure_round_stakes_settled` guard (a round
+  cannot finalize while a conformance stake is unsettled — a void returns every
+  stake). SQL assertions in `supabase/tests/f15_outcomes.sql`; unit tests in
+  `outcome.test.ts`/`outcomes-persist.test.ts`.
 
 ### M4 — LLM Orchestration, Judging & Settlement _(re-scoped 2026-11-19)_
 

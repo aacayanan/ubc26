@@ -1,6 +1,9 @@
-// Categories that users can make predictions on
-export type PredictionCategory = "accuracy" | "speed" | "code_length";
-
+// What a stake or result row is about. Mirrors public.prediction_category in
+// supabase/migrations/20261119000300_f15_failure_tie_void.sql. `conformance`
+// is the post-pivot category; accuracy/speed/code_length are the retired
+// pre-pivot categories, kept only so historical rows still type-check.
+export type PredictionCategory =
+  "conformance" | "accuracy" | "speed" | "code_length";
 // Represents the information needed to identify an LLM
 export interface LLMModel {
   id: string;
@@ -32,7 +35,17 @@ export type ExecutionStatus =
 
 // Mirrors the public.result_status enum in
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.
-export type ResultStatus = "qualified" | "forfeited" | "failed" | "unavailable";
+// Post-pivot (F15): conformed / not_conformed are the judge ruling on a
+// gate-passing render; forfeited means the render failed the deterministic
+// gate; unavailable is infrastructure (a retryable non-verdict). qualified /
+// failed are pre-pivot values kept for historical rows only.
+export type ResultStatus =
+  | "conformed"
+  | "not_conformed"
+  | "qualified"
+  | "forfeited"
+  | "failed"
+  | "unavailable";
 
 // Mirrors the public.tx_status enum in
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.

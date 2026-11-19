@@ -200,15 +200,19 @@ linked project.
 
 ## Database
 
-The schema lives in `supabase/migrations/` — fourteen ordered SQL files covering
+The schema lives in `supabase/migrations/` — nineteen ordered SQL files covering
 users, wallets, model/challenge catalogs, rounds, predictions, evaluation,
 settlement, blockchain transactions, the RLS policies, and the profile-sync
-trigger that creates a `public.users` row for every new auth account. The last
-four extend evaluation for the sandbox (F13: `challenges.entry_point`,
+trigger that creates a `public.users` row for every new auth account. Later
+files extend evaluation for the sandbox (F13: `challenges.entry_point`,
 `model_executions.sandbox_image`/`harness_protocol`), for OpenRouter (F16:
-`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`), and for
-deadline locking (F11: `lock_due_rounds`, service-role only). They apply cleanly
-in order to a fresh Supabase project via `npm run db:push`.
+`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`), for
+deadline locking (F11: `lock_due_rounds`, service-role only), for rendered
+artifacts (F14), and for failure/tie/void behaviour (F15:
+`round_outcomes`, the conformance `result_status` values, and the
+`ensure_round_stakes_settled` guard). They apply cleanly in order to a fresh
+Supabase project via `npm run db:push`, and the F15 file is idempotent on a
+re-run.
 
 Each new auth user gets its `public.users` row from the `on_auth_user_created`
 trigger in `20261118100900_profile_sync_and_funding_status.sql`. Without that
@@ -221,6 +225,34 @@ Assertion scripts in `supabase/tests/` verify the schema acceptance criteria
 hosted Supabase SQL editor: every assertion raises `FAIL: …` on violation,
 a final select confirms success, and everything is rolled back so no data
 persists.
+
+## Outage, tie and void behaviour (F15)
+
+What a render failure, a judge outage, a tie and an all-forfeit round mean is
+decided in `apps/web/lib/server/services/evaluation/outcome.ts` — a pure
+resolver, so every rule is unit-testable and a stored round can be re-resolved
+from its persisted inputs. `outcomes-persist.ts` writes the result.
+
+- **Render error or timeout → forfeit.** The deterministic gate (F14) is the
+  qualification rule: a failed render is never sent to the judge and never
+  eligible for fan-favorite points.
+- **Judge could not see the frames → unavailable, and the round does not
+  settle.** An outage is a retryable non-verdict, not a conformance ruling.
+- **Gate passed but the judge says it is off-brief → `not_conformed`.** The
+  model loses conformance but stays eligible for fan-favorite points — the two
+  outcomes are never conflated.
+- **All models forfeit → void.** No points move and every stake is returned. The
+  database guard `ensure_round_stakes_settled` refuses to finalize a round
+  (settled or voided) while any conformance stake is still unsettled, so a void
+  cannot silently keep points.
+- **Equal conformance → the crowd vote breaks the tie.** If the vote itself
+  ties, a fixed round order decides; the recorded `tie_break` says which rule
+  applied, so a winner is never an unexplained coin flip.
+
+Every per-model verdict lands in `competition_results` (category `conformance`)
+with a plain-language reason, and the round's single outcome lands in
+`round_outcomes`. Both are immutable once the round is finalized. Assertions:
+`supabase/tests/f15_outcomes.sql`.
 
 ## Deadline locking (F11)
 

@@ -15,9 +15,10 @@ import {
 } from "@/lib/server/services/evaluation/persist";
 import {
   buildGenerationMessages,
-  extractPythonCode,
+  extractRenderCode,
   hashMessages,
   PROMPT_TEMPLATE_VERSION,
+  withTokenFloor,
   type GenerationChallenge,
 } from "@/lib/server/services/llm/prompt";
 import type { LLMModelRecord } from "@/lib/server/services/llm/models";
@@ -89,6 +90,11 @@ export async function generateModelSolution(
 
       // The config snapshot is the reproduction record: what params went out,
       // which prompt template, and a hash of the exact text.
+      // Snapshot the params that will ACTUALLY be sent, not the catalog row:
+      // the floor changes the request, and a reproduction record that describes
+      // a different request than went out is worse than none (F16).
+      const requestParams = withTokenFloor(model.config);
+
       const { id: executionId } = await upsertExecution({
         roundId,
         modelId: model.id,
@@ -96,7 +102,7 @@ export async function generateModelSolution(
         attempt,
         openrouterModelId: model.openrouterModelId,
         config: {
-          params: model.config,
+          params: requestParams,
           promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
           promptSha256: promptHash,
           maxAttempts: client.maxAttempts,
@@ -110,7 +116,9 @@ export async function generateModelSolution(
       const outcome = await client.generate({
         model: model.openrouterModelId,
         messages,
-        params: model.config,
+        // The floor matters: a lineup row with an empty config would otherwise
+        // let a reasoning model generate for minutes and forfeit on timeout.
+        params: requestParams,
         correlationId,
       });
 
@@ -135,7 +143,7 @@ export async function generateModelSolution(
         });
       }
 
-      const extraction = extractPythonCode(
+      const extraction = extractRenderCode(
         outcome.content,
         challenge.entryPoint,
       );
