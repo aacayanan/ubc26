@@ -99,7 +99,8 @@ describe("generateModelSolution", () => {
       openrouterModelId: "test/model-a",
       status: "running",
     });
-    expect(written.config.params).toEqual({ temperature: 0 });
+    // The snapshot records what was actually SENT, floor included (F16).
+    expect(written.config.params).toEqual({ temperature: 0, max_tokens: 8192 });
     expect(written.config.promptTemplateVersion).toBe("render-v1");
     expect(written.config.promptSha256).toMatch(/^[0-9a-f]{64}$/);
 

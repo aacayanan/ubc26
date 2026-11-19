@@ -27,6 +27,34 @@ export const PROMPT_TEMPLATE_VERSION = "render-v1";
 export const MAX_SOURCE_CHARS = 256 * 1024;
 
 /**
+ * Floor applied to a model's `max_tokens` when it sets none (F33).
+ *
+ * Measured: the same brief takes 5.2 s with a cap and runs past 100 s without
+ * one, because these are reasoning-capable models that will keep generating
+ * until someone stops them. Without this, a lineup row with an empty `config`
+ * hangs until the client times out and the round forfeits for no model-driven
+ * reason. Generous enough for reasoning plus a full renderer, small enough that
+ * a runaway answer is bounded. Set per model in `llm_models.config`.
+ */
+export const DEFAULT_MAX_TOKENS = 8192;
+
+/**
+ * Apply the token floor to a model's generation params.
+ *
+ * Only fills a gap: an explicit `max_tokens` always wins, so a model that
+ * genuinely needs a larger budget can still be configured to have one.
+ */
+export function withTokenFloor(
+  params: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const merged = { ...(params ?? {}) };
+  if (typeof merged.max_tokens !== "number") {
+    merged.max_tokens = DEFAULT_MAX_TOKENS;
+  }
+  return merged;
+}
+
+/**
  * What a model is told about the brief.
  *
  * Deliberately NOT `BriefRecord`: that row carries `referenceImpl` — a working
