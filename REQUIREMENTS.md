@@ -148,6 +148,14 @@ categories).
   deterministic checks (process exit, no uncaught error, N frames produced,
   frame dimensions match the brief), then judge-model conformance scoring on
   captured frames. Speed and code-length categories are **removed**.
+  **Gate + artifacts done (2026-11-19)** — `evaluation/observe.ts` is the single
+  container→gate mapping, shared by brief validation and model evaluation;
+  `evaluation/artifact-run.ts` renders one model's code at explicit time steps,
+  runs the deterministic gate and writes `rendered_artifacts` (migration
+  `20261119000200`, one row per execution, frames as capped base64 JSON, public
+  read only once the round is past `OPEN`). `isEligibleForJudging` is the one
+  rule for "failed the gate ⇒ never judged, never fan-favourite". The judge model
+  call itself is F31.
 - F15. **Failure, tie and void behavior**: render error or timeout = forfeit;
   judge cannot see frames = `unavailable`; all models forfeit = round voided;
   ties at equal conformance resolved by the crowd's fan-favorite pool.

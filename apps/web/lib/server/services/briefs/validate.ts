@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RenderJob, RenderResultRecord } from "@ai-showdown/shared";
+import type { RenderJob } from "@ai-showdown/shared";
 import { RENDER_PROTOCOL_VERSION } from "@ai-showdown/shared";
 import { getRenderSandboxEnv } from "@/lib/config/sandbox";
 import { logger } from "@/lib/server/logging/logger";
@@ -8,10 +8,8 @@ import {
   runRenderContainer,
   type RenderContainerResult,
 } from "@/lib/server/integrations/docker/render-sandbox";
-import {
-  evaluateGate,
-  type GateOutcome,
-} from "@/lib/server/services/evaluation/gate";
+import type { GateOutcome } from "@/lib/server/services/evaluation/gate";
+import { assessRender } from "@/lib/server/services/evaluation/observe";
 import {
   getBriefVersion,
   publishBrief,
@@ -89,90 +87,15 @@ export async function runReferenceRender(
 /**
  * Turn a container result into a gate outcome.
  *
- * Infrastructure failure is reported as a failed `process_exit` rather than a
- * special case: an operator validating a brief needs to know the render did not
- * happen, and the reason says why.
+ * The mapping itself lives in `evaluation/observe.ts`, shared with F14's model
+ * artifact evaluation so a reference render and a model render are gated by the
+ * same rules.
  */
 function evaluateContainer(
   container: RenderContainerResult,
   brief: BriefRecord,
 ): GateOutcome {
-  if (container.unavailable) {
-    return failedGate(
-      brief,
-      "The render sandbox was unavailable — no image or no Docker daemon.",
-    );
-  }
-
-  if (container.timedOut) {
-    return failedGate(brief, "The render exceeded the wall-clock limit.");
-  }
-
-  if (container.oomKilled) {
-    return failedGate(brief, "The render exceeded its memory limit.");
-  }
-
-  const record: RenderResultRecord | null = container.record;
-  if (record === null) {
-    return failedGate(brief, "The render produced no result record.");
-  }
-
-  if (!record.ok) {
-    return failedGate(
-      brief,
-      `The render failed: ${record.error ?? "unknown error"}`,
-    );
-  }
-
-  // The dimensions the *frames* came back at, not the ones the brief asked for.
-  // A solution that resizes the canvas shows up here and fails the check;
-  // echoing brief.frameWidth/Height would make frame_dimensions tautological.
-  const measured = measureFrames(record.frames);
-
-  return evaluateGate(brief.deterministicChecks, {
-    exitCode: container.exitCode,
-    pageError: record.pageError,
-    frames: record.frames,
-    frameWidth: brief.frameWidth,
-    frameHeight: brief.frameHeight,
-    measuredWidth: measured.width,
-    measuredHeight: measured.height,
-  });
-}
-
-/**
- * The size the frames were actually rendered at.
- *
- * Every frame should agree. If one deviates, that deviating size is reported —
- * an inconsistent render should fail the gate, not be averaged away.
- */
-function measureFrames(frames: RenderResultRecord["frames"]): {
-  width: number | null;
-  height: number | null;
-} {
-  if (frames.length === 0) return { width: null, height: null };
-
-  const { width, height } = frames[0];
-  const deviating = frames.find(
-    (frame) => frame.width !== width || frame.height !== height,
-  );
-
-  return deviating
-    ? { width: deviating.width, height: deviating.height }
-    : { width, height };
-}
-
-function failedGate(brief: BriefRecord, reason: string): GateOutcome {
-  return {
-    passed: false,
-    failureReason: reason,
-    checks: brief.deterministicChecks.map((check) => ({
-      kind: check.kind,
-      passed: false,
-      reason,
-      observed: "not run",
-    })),
-  };
+  return assessRender(container, brief).gate;
 }
 
 /**
