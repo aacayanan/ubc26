@@ -5,12 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   getLinkedWallet,
   getWalletAddress,
+  isWalletAuthUser,
   linkWallet,
+  setPracticeMode,
   type WalletLink,
 } from "@/lib/wallets/link";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 type Status = "checking" | "unlinked" | "linked" | "error";
+
+/** Stand-in for wallet sign-in users, whose address lives in their identity. */
+const walletPlaceholder: WalletLink = { address: "wallet", verifiedAt: null };
 
 export default function LinkWalletStep({
   redirectTo,
@@ -42,8 +47,12 @@ export default function LinkWalletStep({
         const linked = await getLinkedWallet(supabase);
         if (cancelled) return;
 
-        setWallet(linked);
-        setStatus(linked ? "linked" : "unlinked");
+        // Wallet sign-in users are already wallet-identified.
+        const ready = isWalletAuthUser(user)
+          ? (linked ?? walletPlaceholder)
+          : linked;
+        setWallet(ready);
+        setStatus(ready ? "linked" : "unlinked");
       } catch (err) {
         if (cancelled) return;
         setError(
@@ -88,13 +97,46 @@ export default function LinkWalletStep({
   }
 
   function handleSkip() {
-    router.push(`${redirectTo}?practice=1`);
-    router.refresh();
+    void skipToPractice();
   }
 
   function handleContinue() {
     router.push(redirectTo);
     router.refresh();
+  }
+
+  /** Leave practice mode too, so a previously-paper account can go live. */
+  async function continueLive() {
+    setBusy(true);
+    try {
+      const supabase = getBrowserSupabase();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) await setPracticeMode(supabase, user, false);
+    } catch {
+      // Non-fatal: the dashboard still works, just stays labelled practice.
+    } finally {
+      setBusy(false);
+      handleContinue();
+    }
+  }
+
+  async function skipToPractice() {
+    setBusy(true);
+    try {
+      const supabase = getBrowserSupabase();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) await setPracticeMode(supabase, user, true);
+    } catch {
+      // Non-fatal: navigation still proceeds.
+    } finally {
+      setBusy(false);
+      router.push(redirectTo);
+      router.refresh();
+    }
   }
 
   return (
@@ -123,14 +165,23 @@ export default function LinkWalletStep({
         {status === "linked" && wallet && (
           <div className="space-y-4">
             <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-              Linked {shortAddress(wallet.address)}
+              {wallet.address === walletPlaceholder.address
+                ? "Signed in with your Solana wallet."
+                : `Linked ${shortAddress(wallet.address)}`}
             </div>
             <button
               type="button"
-              onClick={handleContinue}
+              onClick={() => void continueLive()}
               className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Continue
+            </button>
+            <button
+              type="button"
+              onClick={handleSkip}
+              className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              Use a practice account instead
             </button>
           </div>
         )}
@@ -144,7 +195,7 @@ export default function LinkWalletStep({
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               <span aria-hidden="true">◎</span>
-              {busy ? "Waiting for wallet…" : "Connect Phantom"}
+              {busy ? "Waiting for wallet…" : "Connect Solana wallet"}
             </button>
             {allowSkip && (
               <button

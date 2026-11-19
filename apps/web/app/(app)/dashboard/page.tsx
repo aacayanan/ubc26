@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { isWalletAuthUser } from "@/lib/wallets/link";
 import PracticeBadge from "@/components/practice-badge";
 
 type DashboardStats = {
@@ -10,6 +11,9 @@ type DashboardStats = {
   predictions: number;
   correct: number;
   streak: number;
+  walletLinked: boolean;
+  practiceMode: boolean;
+  funded: boolean;
 };
 
 type DashboardStatus = "loading" | "error" | "ready";
@@ -78,25 +82,35 @@ async function fetchDashboardStats(): Promise<DashboardStats | null> {
     return null;
   }
 
-  const [predictionsResult, scoresResult] = await Promise.all([
-    // Total predictions under RLS (policies also scope to the caller; the
-    // explicit eq() keeps the intent visible).
-    supabase
-      .from("predictions")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id),
-    // 1:1 profile score row; missing row means brand-new account (zeros).
-    supabase
-      .from("user_scores")
-      .select("total_points, current_streak")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ]);
+  const [predictionsResult, scoresResult, walletResult, profileResult] =
+    await Promise.all([
+      // Total predictions under RLS (policies also scope to the caller; the
+      // explicit eq() keeps the intent visible).
+      supabase
+        .from("predictions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id),
+      // 1:1 profile score row; missing row means brand-new account (zeros).
+      supabase
+        .from("user_scores")
+        .select("total_points, current_streak")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase.from("wallets").select("address").maybeSingle(),
+      supabase
+        .from("users")
+        .select("practice_mode, funded")
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
 
   if (predictionsResult.error) throw predictionsResult.error;
   if (scoresResult.error) throw scoresResult.error;
+  if (walletResult.error) throw walletResult.error;
+  if (profileResult.error) throw profileResult.error;
 
   const score = scoresResult.data;
+  const walletLinked = walletResult.data !== null || isWalletAuthUser(user);
 
   return {
     // TODO(F6): replace with server-authoritative points read
@@ -105,6 +119,10 @@ async function fetchDashboardStats(): Promise<DashboardStats | null> {
     // Correct picks are derived during settlement (F18); not yet queryable.
     correct: 0,
     streak: score?.current_streak ?? 0,
+    walletLinked,
+    // Practice is either an explicit opt-in or the absence of a wallet.
+    practiceMode: !walletLinked || profileResult.data?.practice_mode === true,
+    funded: profileResult.data?.funded === true,
   };
 }
 
@@ -116,6 +134,9 @@ function DashboardContent() {
     predictions: 0,
     correct: 0,
     streak: 0,
+    walletLinked: false,
+    practiceMode: false,
+    funded: false,
   });
 
   const load = useCallback(async () => {
@@ -205,24 +226,26 @@ function DashboardContent() {
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
               Dashboard
             </h1>
-            <PracticeBadge />
+            {stats.practiceMode && <PracticeBadge />}
           </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Your prediction platform at a glance.
           </p>
         </div>
 
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-          <span className="font-medium">Practice mode.</span> You can join and
-          predict on rounds others create — only accounts with a linked Solana
-          wallet can create rounds.{" "}
-          <Link
-            href="/link-wallet"
-            className="font-medium underline underline-offset-4"
-          >
-            Link a wallet
-          </Link>
-        </div>
+        {stats.practiceMode && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <span className="font-medium">Practice mode.</span> You can join and
+            predict on rounds others create — only accounts with a linked Solana
+            wallet can create rounds.{" "}
+            <Link
+              href="/link-wallet"
+              className="font-medium underline underline-offset-4"
+            >
+              {stats.walletLinked ? "Switch to live" : "Link a wallet"}
+            </Link>
+          </div>
+        )}
 
         {/* Quick stats */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

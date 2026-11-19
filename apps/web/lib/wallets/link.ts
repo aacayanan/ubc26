@@ -11,6 +11,25 @@ interface SolanaProviderLike {
 }
 
 /**
+ * True when the account signed in with Solana rather than email. Those users
+ * are wallet-identified from the start, so they need no separate link step.
+ */
+export function isWalletAuthUser(user: User): boolean {
+  return (user.identities ?? []).some(
+    (identity) =>
+      identity.provider === "web3" || identity.provider === "solana",
+  );
+}
+
+/**
+ * Whether the account is wallet-linked: either it signed in with Solana, or
+ * it stored an address through the first-run link step.
+ */
+export function isWalletLinked(user: User, wallet: WalletLink | null): boolean {
+  return wallet !== null || isWalletAuthUser(user);
+}
+
+/**
  * The wallet address this account linked, if any.
  *
  * Signing in with Solana (email/password users) and linking are different
@@ -87,4 +106,22 @@ export async function linkWallet(
 
   if (error) throw error;
   return { address: data.address, verifiedAt: data.verified_at };
+}
+
+/**
+ * Opt the account into or out of practice (paper) trading. Only the
+ * `practice_mode` column is grantable to clients, so this can never widen
+ * access — `funded` stays server-set.
+ */
+export async function setPracticeMode(
+  supabase: SupabaseClient,
+  user: User,
+  practicePurpose: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from("users")
+    .update({ practice_mode: practicePurpose })
+    .eq("id", user.id);
+
+  if (error) throw error;
 }
