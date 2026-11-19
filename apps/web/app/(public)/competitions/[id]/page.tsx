@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CountdownReadout } from "@/components/countdown";
+import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
   Meter,
@@ -35,9 +37,13 @@ export default function CompetitionDetailPage() {
 
   const [round, setRound] = useState<RoundDetail | null>(null);
   const [loading, setLoading] = useState(Boolean(roundId));
+  // A load failure is not the same as "this round does not exist". Collapsing
+  // them told a user with a flaky connection that the round was closed.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Load the round. `round` stays null only while loading or when the id is
-  // unknown — a real round now renders instead of the "closed" fallback.
+  // Load the round. `round` stays null while loading, on a 404, or on a failed
+  // request — but those three now render differently.
   useEffect(() => {
     if (!roundId) return;
     let active = true;
@@ -56,9 +62,14 @@ export default function CompetitionDetailPage() {
         // rather than at 15 call sites — reading a missing `state` silently made
         // every round look closed.
         setRound(loaded ? { ...loaded, state: loaded.status } : null);
+        setLoadError(null);
       })
-      .catch(() => {
-        if (active) setRound(null);
+      .catch((err: unknown) => {
+        if (!active) return;
+        setRound(null);
+        setLoadError(
+          err instanceof Error ? err.message : "Could not load the round",
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -66,7 +77,7 @@ export default function CompetitionDetailPage() {
     return () => {
       active = false;
     };
-  }, [roundId]);
+  }, [roundId, reloadKey]);
 
   const [selected, setSelected] = useState<string>("");
   const [stake, setStake] = useState<string>("250");
@@ -108,6 +119,38 @@ export default function CompetitionDetailPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="shell py-14 sm:py-20">
+        <div className="panel-quiet mx-auto flex max-w-xl flex-col items-center px-6 py-16 text-center">
+          <div role="alert">
+            <h1 className="t-title text-xl text-ink">
+              This round could not be loaded.
+            </h1>
+            <p className="t-body mt-3 max-w-[44ch] text-sm text-muted">
+              {loadError}
+            </p>
+          </div>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                setReloadKey((key) => key + 1);
+              }}
+              className="btn btn-ghost btn-sm"
+            >
+              Try again
+            </button>
+            <Link href="/competitions" className="btn btn-ghost btn-sm">
+              All rounds
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!round) {
     return (
       <div className="shell py-14 sm:py-20">
@@ -133,7 +176,11 @@ export default function CompetitionDetailPage() {
     );
   }
 
-  const isOpen = round.state === "OPEN";
+  // Actionable means OPEN *and* inside the clock. `place_stake` rejects a
+  // post-deadline stake anyway, but offering the form would promise something
+  // the server will refuse — F11 can lag a round's deadline by a job interval.
+  const deadline = describeDeadline(round.deadline);
+  const isOpen = round.state === "OPEN" && !deadline.expired;
   const staked = round.user_stake !== null;
   const poolUsed = round.pool_points / Math.max(round.pool_capacity, 1);
 
@@ -161,9 +208,19 @@ export default function CompetitionDetailPage() {
               >
                 {roundLabel(round.state)}
               </Status>
-              <span className="t-mono text-[0.6875rem] text-faint">
-                {new Date(round.deadline).toLocaleString()}
-              </span>
+              {isOpen ? (
+                <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
+                  <span className="text-faint">closes in</span>
+                  <CountdownReadout
+                    deadline={round.deadline}
+                    className="t-num text-ink"
+                  />
+                </span>
+              ) : (
+                <span className="t-mono text-[0.6875rem] text-faint">
+                  {new Date(round.deadline).toLocaleString()}
+                </span>
+              )}
             </div>
 
             <h1 className="t-title mt-5 text-[clamp(1.6rem,3.2vw,2.25rem)] text-ink">

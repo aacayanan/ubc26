@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "@/components/icons";
+import { CountdownReadout } from "@/components/countdown";
 import PracticeBadge from "@/components/practice-badge";
 import {
   EmptyState,
@@ -12,8 +13,13 @@ import {
 } from "@/components/ui";
 import { NotFoundError } from "@/lib/server/errors/app-error";
 import { getCorrelationId } from "@/lib/server/http/api-error";
+import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
 import { logger } from "@/lib/server/logging/logger";
 import { requireUser } from "@/lib/server/services/auth/session";
+import {
+  getActiveCompetitions,
+  type ActiveCompetition,
+} from "@/lib/server/services/competitions/active-competitions";
 import {
   getOrRepairProfile,
   type Profile,
@@ -98,6 +104,19 @@ export default async function DashboardPage() {
 
   const greeting = profile.displayName ?? user.email?.split("@")[0] ?? "there";
 
+  // F9: the dashboard's open-round list. A failure here must not take the whole
+  // page down — the profile strip is still worth showing — so it degrades to an
+  // empty list, which reads as "nothing open" rather than as an error.
+  let openRounds: ActiveCompetition[] = [];
+  try {
+    openRounds = await getActiveCompetitions(getServiceRoleSupabase());
+  } catch (error) {
+    logger.error("dashboard.rounds.unavailable", {
+      correlationId: getCorrelationId(),
+      error,
+    });
+  }
+
   return (
     <div className="shell py-12 sm:py-14">
       <div className="space-y-10">
@@ -162,17 +181,56 @@ export default async function DashboardPage() {
             Open rounds
           </SectionHeading>
           <div className="mt-4">
-            <EmptyState
-              title="No round is open right now."
-              action={
-                <Link href="/competitions" className="btn btn-ghost btn-sm">
-                  Browse rounds
-                </Link>
-              }
-            >
-              Rounds are opened by the operator. When the next brief drops it
-              appears here with its deadline and a live pool.
-            </EmptyState>
+            {openRounds.length === 0 ? (
+              <EmptyState
+                title="No round is open right now."
+                action={
+                  <Link href="/competitions" className="btn btn-ghost btn-sm">
+                    Browse rounds
+                  </Link>
+                }
+              >
+                Rounds are opened by the operator. When the next brief drops it
+                appears here with its deadline and a live pool.
+              </EmptyState>
+            ) : (
+              // F9: the dashboard is where open rounds are actionable, not just
+              // a link to another page. Same deadline readout as the round list.
+              <ul className="grid gap-3">
+                {openRounds.map((round) => (
+                  <li key={round.id}>
+                    <Link
+                      href={`/competitions/${round.id}`}
+                      className="panel panel-interactive flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[0.9375rem] text-ink">
+                          {round.title}
+                        </p>
+                        <p className="t-mono mt-1 text-[0.625rem] text-faint">
+                          {round.models.join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-5">
+                        <span className="t-mono text-[0.625rem] text-muted">
+                          <span className="text-faint">closes in </span>
+                          <CountdownReadout
+                            deadline={round.deadline}
+                            className="t-num text-ink"
+                          />
+                        </span>
+                        <span className="t-num text-[0.875rem] text-ink">
+                          {round.potentialPoints.toLocaleString()}
+                          <span className="t-mono ml-1 text-[0.5625rem] text-faint">
+                            pts pool
+                          </span>
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
 

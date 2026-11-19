@@ -5,6 +5,7 @@ import type { RoundStatus } from "@ai-showdown/shared";
 import { InternalError, NotFoundError } from "@/lib/server/errors/app-error";
 import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
 import { getBriefById } from "@/lib/server/services/briefs/briefs";
+import { DEFAULT_POOL_CAPACITY } from "@/lib/server/services/competitions/active-competitions";
 import { getRoundStakeSummary } from "@/lib/server/services/scoring/stakes";
 
 /**
@@ -36,8 +37,6 @@ export interface RoundDetail {
   viewerStake: { modelId: string; points: number } | null;
 }
 
-const DEFAULT_POOL_CAPACITY = 5000;
-
 export async function getRoundDetail(
   roundId: string,
   viewerId: string | null,
@@ -46,7 +45,7 @@ export async function getRoundDetail(
   const { data: roundData, error: roundError } = await supabase
     .from("rounds")
     .select(
-      "id, slug, status, challenge_id, prediction_deadline, round_models(ordinal, llm_models(id, name))",
+      "id, slug, status, challenge_id, prediction_deadline, challenges(title, prompt), round_models(ordinal, llm_models(id, name))",
     )
     .eq("id", roundId)
     .maybeSingle();
@@ -64,6 +63,10 @@ export async function getRoundDetail(
     status: RoundStatus;
     challenge_id: string;
     prediction_deadline: string;
+    challenges:
+      | { title: string; prompt: string }
+      | Array<{ title: string; prompt: string }>
+      | null;
     round_models: Array<{
       ordinal: number;
       llm_models:
@@ -71,7 +74,19 @@ export async function getRoundDetail(
     }> | null;
   };
 
+  // Prefer the brief record, but fall back to the round's own challenge row.
+  //
+  // `getBriefById` only returns JavaScript briefs (it filters `language`), so a
+  // round opened against a legacy challenge got `null` here — and the page then
+  // rendered the slug as the title and an empty body. The list page reads the
+  // challenge directly and shows it fine, so the detail page has to as well.
   const brief = await getBriefById(round.challenge_id, supabase);
+  const challenge = Array.isArray(round.challenges)
+    ? round.challenges[0]
+    : round.challenges;
+
+  const briefTitle = brief?.title ?? challenge?.title ?? round.slug;
+  const briefText = brief?.prompt ?? challenge?.prompt ?? "";
 
   // Participants come from `round_models`, not the active lineup: a round
   // competes the models it was opened against, which is also who backers could
@@ -97,8 +112,8 @@ export async function getRoundDetail(
     id: round.id,
     slug: round.slug,
     status: round.status,
-    briefTitle: brief?.title ?? round.slug,
-    briefText: brief?.prompt ?? "",
+    briefTitle,
+    briefText,
     models,
     predictionDeadline: round.prediction_deadline,
     poolPoints: potPoints,
