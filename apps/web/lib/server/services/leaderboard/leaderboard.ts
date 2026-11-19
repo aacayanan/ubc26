@@ -20,16 +20,20 @@ import { InternalError } from "@/lib/server/errors/app-error";
  * Rounds: distinct SETTLED/ARCHIVED rounds in `public.score_events`, the
  * per-round settlement ledger (unique on round_id + user_id).
  *
- * Waiting on F18 (see REQUIREMENTS.md, F24 status):
- *   - streaks: `user_scores.current_streak` / `longest_streak` exist but their
- *     rule (what counts as a "hit") is F18's to define. Until then `streak`
- *     is null and the UI says so.
- *   - hit rate: needs the finalized conformance outcome per round. The
- *     current `competition_results` table still carries the retired
- *     accuracy/speed/code-length categories, so it is not read here.
- * Flip `F18_STREAKS_FINAL` once F18 documents its streak rule.
+ * Streaks (F18, settled): a stake that settles `won` extends
+ * `user_scores.current_streak`; a loss resets it to 0; a void leaves it
+ * unchanged (there was no bet to lose). Fan-favorite awards do not affect
+ * streaks. Settlement writes the column, so ranking can show it directly.
+ *
+ * Score events (F18): one `kind = 'stake'` row per participating user per
+ * settled round — including 0-point losses and voids — plus a `kind =
+ * 'fan_favorite'` row for crowd-vote winners. Both kinds are summed into the
+ * balance, but `rounds` counts a round once even when a user has both.
+ *
+ * Hit rate stays pending: it needs a per-round "hit" definition wider than the
+ * streak rule, which F24 owns.
  */
-export const F18_STREAKS_FINAL = false;
+export const F18_STREAKS_FINAL = true;
 
 /** Round states whose score events are final and may be ranked. */
 export const SETTLED_ROUND_STATES = ["SETTLED", "ARCHIVED"] as const;
@@ -170,6 +174,10 @@ export function rankEntries(
  * Sum settled events per user. Accounts with no settled event are absent
  * (they have nothing to rank on). Malformed points are dropped rather than
  * guessed, so a bad row can never inflate a total.
+ *
+ * A user can have more than one event in a round — a stake return plus a
+ * fan-favorite award (F18). Points from every kind are summed, but the round is
+ * counted once, so "Rounds" stays a count of settled rounds rather than events.
  */
 export function aggregateSettled(
   events: SettledScoreEvent[],
@@ -181,10 +189,9 @@ export function aggregateSettled(
       points: 0,
       rounds: new Set<string>(),
     };
-    // The ledger is unique per (round, user); de-dup defensively anyway.
-    if (current.rounds.has(event.roundId)) continue;
-    current.rounds.add(event.roundId);
+    // Every kind counts toward points; the set de-dups the round count.
     current.points += event.points;
+    current.rounds.add(event.roundId);
     totals.set(event.userId, current);
   }
   return totals;

@@ -65,9 +65,22 @@ describe("aggregateSettled", () => {
     expect(totals.get(U(2))).toMatchObject({ points: 0 });
   });
 
-  it("drops malformed points and duplicate round rows instead of guessing", () => {
+  it("sums every event kind in a round but counts the round once", () => {
+    // A user who staked AND voted for the fan-favorite has two events (F18);
+    // both count toward points, the round counts once.
     const totals = aggregateSettled([
       { userId: U(1), roundId: "r1", points: 10 },
+      { userId: U(1), roundId: "r1", points: 25 },
+      { userId: U(1), roundId: "r2", points: 5 },
+      { userId: U(2), roundId: "r1", points: 0 },
+    ]);
+    expect(totals.get(U(1))).toMatchObject({ points: 40 });
+    expect(totals.get(U(1))!.rounds.size).toBe(2);
+    expect(totals.get(U(2))).toMatchObject({ points: 0 });
+  });
+
+  it("drops malformed points instead of guessing", () => {
+    const totals = aggregateSettled([
       { userId: U(1), roundId: "r1", points: 10 },
       { userId: U(1), roundId: "r2", points: -4 },
       { userId: U(1), roundId: "r3", points: 1.5 },
@@ -189,10 +202,10 @@ describe("getLeaderboard", () => {
     expect(board.entries[0]).toMatchObject({
       displayName: "Ada",
       settledRounds: 2,
-      // Streak rule is F18's; withheld until F18_STREAKS_FINAL.
-      streak: null,
+      // F18 defines the streak rule and settlement writes the column.
+      streak: 4,
     });
-    expect(board.pending).toEqual({ streaks: true, hitRate: true });
+    expect(board.pending).toEqual({ streaks: false, hitRate: true });
     expect(JSON.stringify(board)).not.toContain("example.com");
     expect(board.entries.find((e) => e.isViewer)!.pseudonymous).toBe(true);
   });
@@ -211,7 +224,7 @@ describe("getLeaderboard", () => {
     await expect(getLeaderboard(client, null)).resolves.toEqual({
       entries: [],
       totalRanked: 0,
-      pending: { streaks: true, hitRate: true },
+      pending: { streaks: false, hitRate: true },
     });
     expect(calls.some((c) => c.table === "users")).toBe(false);
   });

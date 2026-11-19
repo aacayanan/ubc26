@@ -1,9 +1,15 @@
 // What a stake or result row is about. Mirrors public.prediction_category in
-// supabase/migrations/20261119000300_f15_failure_tie_void.sql. `conformance`
+// supabase/migrations/20261119000600_f15_failure_tie_void.sql. `conformance`
 // is the post-pivot category; accuracy/speed/code_length are the retired
 // pre-pivot categories, kept only so historical rows still type-check.
 export type PredictionCategory =
   "conformance" | "accuracy" | "speed" | "code_length";
+
+// What a `public.score_events` row settles (F18). Mirrors the kind check in
+// supabase/migrations/20261119000800_f18_stakes_and_votes.sql. `stake` is the
+// credited return on a settled stake (0 for a loss or a void); `fan_favorite`
+// is the crowd-vote award. A user can hold both kinds in one round.
+export type ScoreEventKind = "stake" | "fan_favorite";
 // Represents the information needed to identify an LLM
 export interface LLMModel {
   id: string;

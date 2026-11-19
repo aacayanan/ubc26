@@ -29,6 +29,14 @@ const ENV_FILE = join(HERE, "..", "apps", "web", ".env.local");
 const BASE_URL = process.env.DEV_BASE_URL ?? "http://localhost:3000";
 
 const PREPARE_ONLY = process.argv.includes("--prepare");
+// Stop after creating the round but before locking it, so the staking window is
+// open and a real account can stake through the UI (F18's funded gate). Then
+// `--round <id>` locks nothing — `--lock <id>` does.
+const OPEN_ONLY = process.argv.includes("--open");
+const LOCK_ARG = (() => {
+  const index = process.argv.indexOf("--lock");
+  return index >= 0 ? process.argv[index + 1] : null;
+})();
 const ROUND_ARG = (() => {
   const index = process.argv.indexOf("--round");
   return index >= 0 ? process.argv[index + 1] : null;
@@ -173,7 +181,11 @@ async function createLockedRound(brief, lineup, actorId) {
     .replace(/[^0-9]/g, "")
     .slice(0, 14)}`;
   const opensAt = new Date(Date.now() - 1000).toISOString();
-  const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  // A long-ish window so a human can actually stake through the UI; the normal
+  // path locks immediately and never needs it.
+  const deadline = new Date(
+    Date.now() + (OPEN_ONLY ? 30 : 5) * 60 * 1000,
+  ).toISOString();
 
   const { data: round, error } = await db.rpc("create_competition", {
     p_slug: slug,
@@ -186,6 +198,9 @@ async function createLockedRound(brief, lineup, actorId) {
 
   if (error) fail(`Could not create the round: ${error.message}`);
 
+  // `--open` stops here: the round stays OPEN so a real account can stake.
+  if (OPEN_ONLY) return round;
+
   const { error: lockError } = await db.rpc("transition_round", {
     p_round_id: round.id,
     p_to_status: "LOCKED",
@@ -196,6 +211,24 @@ async function createLockedRound(brief, lineup, actorId) {
   if (lockError) fail(`Could not lock the round: ${lockError.message}`);
 
   return round;
+}
+
+/** Lock an OPEN round so the pipeline may run (used after staking via the UI). */
+async function lockRound(roundId) {
+  const { data: actorId } = await db
+    .from("users")
+    .select("id")
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await db.rpc("transition_round", {
+    p_round_id: roundId,
+    p_to_status: "LOCKED",
+    p_reason: "dev pipeline run",
+    ...(actorId?.id ? { p_actor_id: actorId.id } : {}),
+  });
+
+  if (error) fail(`Could not lock the round: ${error.message}`);
 }
 
 async function fireJob(roundId) {
@@ -246,6 +279,15 @@ async function main() {
   await assertMigrated();
   await seatJudge();
 
+  // Lock an existing OPEN round (the staking window has closed by then) and run.
+  if (LOCK_ARG) {
+    await lockRound(LOCK_ARG);
+    console.log(`Locked ${LOCK_ARG}`);
+    if (!PREPARE_ONLY) await fireJob(LOCK_ARG);
+    console.log(`\nWatch: ${BASE_URL}/dev/pipeline/${LOCK_ARG}`);
+    return;
+  }
+
   if (ROUND_ARG) {
     console.log(`Using round ${ROUND_ARG}`);
     if (!PREPARE_ONLY) await fireJob(ROUND_ARG);
@@ -261,6 +303,16 @@ async function main() {
   console.log(`Lineup: ${lineup.map((model) => model.slug).join(", ")}`);
 
   const round = await createLockedRound(brief, lineup, actorId);
+
+  if (OPEN_ONLY) {
+    console.log(`Round:  ${round.slug} (${round.id}) — OPEN`);
+    console.log(
+      `\nStake now:  ${BASE_URL}/competitions/${round.id}` +
+        `\nThen run:   node scripts/dev-pipeline-run.mjs --lock ${round.id}`,
+    );
+    return;
+  }
+
   console.log(`Round:  ${round.slug} (${round.id}) — LOCKED`);
 
   if (!PREPARE_ONLY) await fireJob(round.id);

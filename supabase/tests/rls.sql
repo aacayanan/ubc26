@@ -26,9 +26,13 @@ values
    'authenticated', 'authenticated', 'bob@ai-showdown.test', 'not-a-real-hash',
    now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
+-- The F8 signup trigger (handle_new_user) already inserted a profile for each
+-- auth.users row above, so this is an upsert: it sets display_name without
+-- tripping the primary key.
 insert into public.users (id, display_name) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'Alice'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 'Bob');
+  ('aaaaaaaa-0000-0000-0000-000000000002', 'Bob')
+on conflict (id) do update set display_name = excluded.display_name;
 
 insert into public.llm_models (slug, name, openrouter_model_id) values
   ('model-a', 'Model A', 'org/model-a'),
@@ -73,9 +77,12 @@ insert into public.blockchain_transactions (idempotency_key, signature, purpose,
   ('tx-key-a', 'sig-a', 'prediction_commitment', 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001'),
   ('tx-key-b', 'sig-b', 'prediction_commitment', 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000002');
 
+-- The signup trigger also created a user_scores row per account (F6/F18), so
+-- upsert rather than insert.
 insert into public.user_scores (user_id, total_points) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 100),
-  ('aaaaaaaa-0000-0000-0000-000000000002', 50);
+  ('aaaaaaaa-0000-0000-0000-000000000002', 50)
+on conflict (user_id) do update set total_points = excluded.total_points;
 
 insert into public.competition_results (round_id, model_id, category, status, placement, metric_value)
 select (select id from public.rounds where slug = 'r-main'),
@@ -141,11 +148,19 @@ begin
   select count(*) into n from public.blockchain_transactions;
   if n <> 0 then raise exception 'FAIL: anon can read blockchain_transactions (%)', n; end if;
 
-  select count(*) into n from public.challenges;
-  if n <> 1 then raise exception 'FAIL: anon should see only published challenges, got %', n; end if;
+  -- Assert about this fixture's own rows, not a global count: later migrations
+  -- (F8's demo catalog) also insert published challenges.
+  select count(*) into n from public.challenges where slug = 'c-draft';
+  if n <> 0 then raise exception 'FAIL: anon can read a draft challenge'; end if;
+
+  select count(*) into n from public.challenges where slug = 'c-pub';
+  if n <> 1 then raise exception 'FAIL: anon cannot read a published challenge'; end if;
 
   select count(*) into n from public.test_cases;
-  if n <> 1 then raise exception 'FAIL: anon should see only public test cases, got %', n; end if;
+  if n < 1 then raise exception 'FAIL: anon cannot read public test cases'; end if;
+
+  select count(*) into n from public.test_cases where kind = 'hidden';
+  if n <> 0 then raise exception 'FAIL: anon can read a hidden test case'; end if;
 end $$;
 
 -- anon has no insert privilege on predictions (revoked in the RLS migration).
