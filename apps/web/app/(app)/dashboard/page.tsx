@@ -120,9 +120,10 @@ async function fetchDashboardStats(): Promise<DashboardStats | null> {
     correct: 0,
     streak: score?.current_streak ?? 0,
     walletLinked,
-    // Practice is either an explicit opt-in or the absence of a wallet.
-    practiceMode: !walletLinked || profileResult.data?.practice_mode === true,
-    funded: profileResult.data?.funded === true,
+    // A linked Solana account is a funded account; practice is an explicit
+    // opt-out, so it is possible to be funded and choosing paper trading.
+    funded: profileResult.data?.funded ?? walletLinked,
+    practiceMode: profileResult.data?.practice_mode === true,
   };
 }
 
@@ -226,23 +227,38 @@ function DashboardContent() {
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
               Dashboard
             </h1>
-            {stats.practiceMode && <PracticeBadge />}
+            {stats.practiceMode && <PracticeBadge label="Practice" />}
+            {!stats.funded && <PracticeBadge label="No wallet" />}
           </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Your prediction platform at a glance.
           </p>
         </div>
 
-        {stats.practiceMode && (
+        {!stats.funded && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-            <span className="font-medium">Practice mode.</span> You can join and
-            predict on rounds others create — only accounts with a linked Solana
-            wallet can create rounds.{" "}
+            <span className="font-medium">No Solana account linked.</span> You
+            can join and predict on rounds others create, but only funded
+            accounts (those with a linked Solana wallet) can create rounds.{" "}
             <Link
               href="/link-wallet"
               className="font-medium underline underline-offset-4"
             >
-              {stats.walletLinked ? "Switch to live" : "Link a wallet"}
+              Link a wallet
+            </Link>
+          </div>
+        )}
+
+        {stats.funded && stats.practiceMode && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <span className="font-medium">Practice mode.</span> Your Solana
+            account is linked, but you&apos;re playing with paper predictions —
+            nothing is tracked beyond points.{" "}
+            <Link
+              href="/link-wallet"
+              className="font-medium underline underline-offset-4"
+            >
+              Switch to live
             </Link>
           </div>
         )}

@@ -1,20 +1,25 @@
 /**
- * Marks accounts that have not linked a Solana wallet. They can make
- * predictions on rounds others create, but cannot create rounds — only
- * funded, wallet-linked accounts can (see CLAUDE.md: points and leaderboards
- * only, no real money).
+ * Small status pill for accounts that can predict but cannot create rounds:
+ * either no Solana wallet is linked ("No wallet"), or a funded account has
+ * opted into paper trading ("Practice").
  */
 export default function PracticeBadge({
+  label = "Practice",
   className = "",
 }: {
+  label?: string;
   className?: string;
 }) {
   return (
     <span
-      title="Practice mode: you can predict, but not create rounds"
+      title={
+        label === "Practice"
+          ? "Practice mode: paper predictions, not tracked as live"
+          : "Link a Solana wallet to create rounds"
+      }
       className={`inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 ${className}`}
     >
-      Practice
+      {label}
     </span>
   );
 }
