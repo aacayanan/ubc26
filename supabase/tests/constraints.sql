@@ -50,10 +50,12 @@ insert into public.rounds (slug, challenge_id, prediction_deadline) values
   ('r-lock', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day'),
   ('r-past', (select id from public.challenges where slug = 'c-pub'), now() - interval '1 hour'),
   ('r-happy', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day'),
-  ('r-jmp', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day');
+  ('r-jmp', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day'),
+  ('r-failed', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day'),
+  ('r-cancel', (select id from public.challenges where slug = 'c-pub'), now() + interval '1 day');
 
 update public.rounds set status = 'OPEN'
-  where slug in ('r-main', 'r-lock', 'r-past', 'r-jmp');
+  where slug in ('r-main', 'r-lock', 'r-past', 'r-jmp', 'r-failed', 'r-cancel');
 
 insert into public.round_models (round_id, model_id)
 select r.id, m.id
@@ -204,6 +206,66 @@ select pg_temp.assert_fails(
   $sql$update public.rounds set status = 'OPEN' where slug = 'r-happy'$sql$,
   'P0001', '%invalid round status transition%');
 
+-- Failure, cancel, and retry transitions.
+select pg_temp.assert_ok('OPEN -> LOCKED before failure',
+  $sql$update public.rounds set status = 'LOCKED', locked_at = now() where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_ok('LOCKED -> RUNNING before failure',
+  $sql$update public.rounds set status = 'RUNNING', started_at = now() where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_ok('RUNNING -> EVALUATING before failure',
+  $sql$update public.rounds set status = 'EVALUATING' where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_ok('EVALUATING -> FAILED',
+  $sql$update public.rounds set status = 'FAILED' where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_fails(
+  'failed round cannot jump directly to SETTLED',
+  $sql$update public.rounds set status = 'SETTLED' where slug = 'r-failed'$sql$,
+  'P0001', '%invalid round status transition%');
+
+select pg_temp.assert_ok('FAILED -> RETRYING',
+  $sql$update public.rounds set status = 'RETRYING' where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_ok('RETRYING -> EVALUATING',
+  $sql$update public.rounds set status = 'EVALUATING' where slug = 'r-failed'$sql$);
+
+select pg_temp.assert_ok('OPEN -> CANCELLED',
+  $sql$update public.rounds set status = 'CANCELLED' where slug = 'r-cancel'$sql$);
+
+select pg_temp.assert_fails(
+  'cancelled round cannot restart',
+  $sql$update public.rounds set status = 'OPEN' where slug = 'r-cancel'$sql$,
+  'P0001', '%invalid round status transition%');
+
+select pg_temp.assert_ok('create audited transition',
+  $sql$select public.transition_round(
+    (select id from public.rounds where slug = 'r-failed'),
+    'FAILED',
+    'EVALUATING',
+    'retry produced another failure',
+    null
+  )$sql$);
+
+select pg_temp.assert_ok('retry target status is idempotent',
+  $sql$select public.transition_round(
+    (select id from public.rounds where slug = 'r-failed'),
+    'FAILED',
+    'FAILED',
+    'duplicate retry notification',
+    null
+  )$sql$);
+
+select pg_temp.assert_ok('RPC and direct transitions are auditable',
+  $sql$do $audit$
+  begin
+    if (select count(*) from public.round_transition_events
+        where round_id = (select id from public.rounds where slug = 'r-failed')) = 0 then
+      raise exception 'missing lifecycle audit events';
+    end if;
+  end;
+  $audit$$sql$);
+
 -- ---------------------------------------------------------------------------
 -- Evaluation + settlement idempotency (duplicates rejected)
 -- ---------------------------------------------------------------------------
@@ -238,6 +300,30 @@ select pg_temp.assert_fails(
   'duplicate score event (round, user) — settlement idempotency',
   $sql$insert into public.score_events (round_id, user_id, points) values ((select id from public.rounds where slug = 'r-main'), 'aaaaaaaa-0000-0000-0000-000000000001', 10)$sql$,
   '23505');
+
+select pg_temp.assert_ok('settle r-main for finalized-result protection',
+  $sql$update public.rounds set status = 'LOCKED', locked_at = now() where slug = 'r-main'$sql$);
+select pg_temp.assert_ok('run r-main for finalized-result protection',
+  $sql$update public.rounds set status = 'RUNNING', started_at = now() where slug = 'r-main'$sql$);
+select pg_temp.assert_ok('evaluate r-main for finalized-result protection',
+  $sql$update public.rounds set status = 'EVALUATING' where slug = 'r-main'$sql$);
+select pg_temp.assert_ok('settle r-main',
+  $sql$update public.rounds set status = 'SETTLED', settled_at = now() where slug = 'r-main'$sql$);
+
+select pg_temp.assert_fails(
+  'settled round competition result cannot be edited',
+  $sql$update public.competition_results set metric_value = 999 where round_id = (select id from public.rounds where slug = 'r-main')$sql$,
+  'P0001', '%finalized round%');
+
+select pg_temp.assert_fails(
+  'settled round competition result cannot be deleted',
+  $sql$delete from public.competition_results where round_id = (select id from public.rounds where slug = 'r-main')$sql$,
+  'P0001', '%finalized round%');
+
+select pg_temp.assert_fails(
+  'settled round score event cannot be edited',
+  $sql$update public.score_events set points = 999 where round_id = (select id from public.rounds where slug = 'r-main')$sql$,
+  'P0001', '%finalized round%');
 
 -- ---------------------------------------------------------------------------
 -- Catalog + identity uniqueness and check constraints

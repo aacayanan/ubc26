@@ -46,8 +46,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 - F6. User profile record sync (Supabase auth → Users table), points balance display (starts at 0). **Partial (2026-11-18)** — migration `20261118100900` creates the `public.users` row from an `on_auth_user_created` trigger for every signup path, plus a backfill and the `practice_mode`/`funded` columns. Still open: points are read client-side from `user_scores` and show zeros; the server-authoritative read plugs into `requireUser()`.
 
 ### M2 — Competitions & Predictions
-
-- F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`.
+- F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`. **Done (2026-11-18)** — shared service state machine, CAS transition repository contract, audited database RPC, and finalized-result guards are implemented.
 - F8. Admin/internal path to create a competition round (challenge, participating models, prediction deadline).
 - F9. Dashboard lists open competitions: challenge preview, models, deadline countdown, potential points.
 - F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions. Joining a round starts a prompt session, and only funded accounts (linked Solana wallet, not in practice_mode) may join live; practice accounts browse and observe. **Enforcement gap:** M1 ships this rule as UI copy and a derived `funded` column only — the join endpoint must reject unfunded/practice accounts at the API layer, and RLS must scope inserts, when this lands.
