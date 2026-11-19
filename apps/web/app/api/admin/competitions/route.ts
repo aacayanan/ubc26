@@ -1,6 +1,6 @@
 import { withApiErrorHandling } from "@/lib/server/http/api-error";
 import { ValidationError } from "@/lib/server/errors/app-error";
-import { requireAdmin } from "@/lib/server/auth";
+import { requireAdmin } from "@/lib/server/services/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 interface CreateCompetitionBody {
