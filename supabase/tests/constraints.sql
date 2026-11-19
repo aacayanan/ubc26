@@ -35,9 +35,11 @@ insert into public.llm_models (slug, name, openrouter_model_id) values
   ('model-b', 'Model B', 'org/model-b'),
   ('model-c', 'Model C', 'org/model-c');
 
-insert into public.challenges (slug, title, prompt, status) values
-  ('c-pub', 'Published challenge', 'Write code.', 'published'),
-  ('c-draft', 'Draft challenge', 'Work in progress.', 'draft');
+-- `entry_point` arrived in F13. A published challenge must declare one, so the
+-- published fixture sets it; the draft deliberately leaves it null.
+insert into public.challenges (slug, title, prompt, status, entry_point) values
+  ('c-pub', 'Published challenge', 'Write code.', 'published', 'solve'),
+  ('c-draft', 'Draft challenge', 'Work in progress.', 'draft', null);
 
 insert into public.test_cases (challenge_id, kind, ordinal, expected_output) values
   ((select id from public.challenges where slug = 'c-pub'), 'public', 1, 'ok'),
@@ -275,6 +277,34 @@ select pg_temp.assert_fails(
   'duplicate signature',
   $sql$insert into public.blockchain_transactions (idempotency_key, signature, purpose, status, user_id) values ('tx-key-2', 'sig-1', 'prediction_commitment', 'confirmed', 'aaaaaaaa-0000-0000-0000-000000000001')$sql$,
   '23505');
+
+-- ---------------------------------------------------------------------------
+-- F13 sandbox: challenge entry point (the function the sandbox calls)
+-- ---------------------------------------------------------------------------
+-- F12's seed bank must set entry_point before flipping a challenge to
+-- 'published', or the update below fails.
+select pg_temp.assert_fails(
+  'publishing a challenge without an entry point',
+  $sql$update public.challenges set status = 'published' where slug = 'c-draft'$sql$,
+  '23514');
+
+select pg_temp.assert_fails(
+  'entry point cannot shadow a dunder name',
+  $sql$update public.challenges set entry_point = '__import__' where slug = 'c-draft'$sql$,
+  '23514');
+
+select pg_temp.assert_fails(
+  'entry point rejects non-identifier characters',
+  $sql$update public.challenges set entry_point = 'solve; drop table x' where slug = 'c-draft'$sql$,
+  '23514');
+
+select pg_temp.assert_ok(
+  'a draft may carry a valid entry point',
+  $sql$update public.challenges set entry_point = 'main' where slug = 'c-draft'$sql$);
+
+select pg_temp.assert_ok(
+  'a model execution records its sandbox image and protocol',
+  $sql$insert into public.model_executions (round_id, model_id, run_type, openrouter_model_id, sandbox_image, harness_protocol) values ((select id from public.rounds where slug = 'r-main'), (select id from public.llm_models where slug = 'model-c'), 'generation', 'org/model-c', 'ai-showdown-sandbox:py3.12@sha256:0000000000000000000000000000000000000000000000000000000000000000', 1)$sql$);
 
 -- ---------------------------------------------------------------------------
 rollback;

@@ -63,7 +63,9 @@ Configure these when the corresponding integrations are implemented:
 
 - `OPENROUTER_API_KEY` - Private server-only API key
 - `SUPABASE_SERVICE_ROLE_KEY` - Private server-only Supabase key that
-  bypasses RLS (Supabase dashboard → Settings → API)
+  bypasses RLS (Supabase dashboard → Settings → API). Required from F13
+  on: sandbox result writes have no RLS write policy, so only the
+  service role can record evaluation results.
 
 Never commit real API keys or secrets.
 
@@ -234,10 +236,37 @@ docker run --rm -p 3000:3000 --env-file apps/web/.env.local ai-showdown
 
 ### Notes
 
-- The evaluation sandbox (REQUIREMENTS.md F13) will run as a
-  separate container later; this image only packages the web app.
+- The evaluation sandbox lives in `sandbox/` and runs as its own
+  image. See [Sandbox](#sandbox) and
+  [`docs/sandbox-threat-model.md`](docs/sandbox-threat-model.md).
 - Never pass server-only keys (e.g. `OPENROUTER_API_KEY`) as
   `NEXT_PUBLIC_` variables.
+
+## Sandbox
+
+Every LLM-generated solution runs in a fresh container from `sandbox/`, never in
+the app process. The container has no network, a read-only rootfs, CPU/memory/
+process limits, and drops each test to an unprivileged uid. The load-bearing
+control is that **expected answers never enter the container** — it returns the
+solution's value and the host decides pass/fail, so a forged result can only
+substitute the solution's own answer.
+
+Build and pin the image:
+
+```bash
+npm run sandbox:build
+docker image inspect ai-showdown-sandbox:py3.12 \
+  --format '{{index .RepoDigests 0}}'
+```
+
+Put that digest-pinned reference in `apps/web/.env.local` as `SANDBOX_IMAGE`.
+The runner refuses a tag-only reference, because a tag re-pulls and would change
+what a past verdict meant.
+
+The runner needs access to a Docker daemon — a mounted socket locally, or a
+sidecar at deploy time (deployment host is still an open item, F28). Full
+control stack, measured attack results, and residual risks:
+[`docs/sandbox-threat-model.md`](docs/sandbox-threat-model.md).
 
 ## Architecture
 
