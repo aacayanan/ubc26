@@ -50,3 +50,46 @@ a pipe, so a solution cannot flood or deadlock the harness.
 
 `main.py` and `child.py` are trusted code that runs next to untrusted code.
 Neither decides correctness.
+
+## Render sandbox (`render/`)
+
+The Python image above is the pre-pivot evaluation path. A visual brief (F12) is
+rendered by a browser instead: the model writes
+`function <entryPoint>(t, ctx, canvas)`, and headless Chromium calls it once per
+frame. That image lives in [`render/`](render/).
+
+```bash
+npm run sandbox:render:build   # docker build -t ai-showdown-render:chromium sandbox/render/
+```
+
+Pin its digest the same way and put it in `apps/web/.env.local` as
+`RENDER_SANDBOX_IMAGE`.
+
+**Why a separate image.** Chromium needs a bigger memory ceiling and a writable
+`/dev/shm`; raising those on the Python runner would loosen a boundary that does
+not need it. The two images never share a container.
+
+**What stays the same.** No network (`--network none`), immutable rootfs
+(`--read-only`), `noexec` tmpfs, all capabilities dropped, `no-new-privileges`,
+and the same stdin-job / stdout-record protocol. The host still decides every
+verdict — the container reports frames and whether each was flat; `gate.ts`
+turns that into the deterministic checks.
+
+**What differs.** The renderer runs as an unprivileged uid (1000), not root.
+Chromium's own sandbox needs namespaces the container does not provide, so it is
+disabled in the harness and replaced by the non-root process plus the
+container-level controls above.
+
+**Determinism.** Frames are captured at explicit time steps —
+`i / (frameCount - 1) * targetDurationMs` — never wall-clock, and the image is
+digest-pinned, so the same code, brief and image yield byte-identical frames.
+Verified: three runs of the seeded reference implementations produced identical
+SHA-256 frame hashes.
+
+| File                 | Role                                                             |
+| -------------------- | ---------------------------------------------------------------- |
+| `render/Dockerfile`  | Pins the Playwright/Chromium base by digest; copies the harness  |
+| `render/harness.mjs` | Trusted harness: job intake, per-frame render, one NDJSON record |
+
+`harness.mjs` is trusted code that runs next to untrusted code. It reports
+observations; it does not decide whether a render passed.

@@ -78,3 +78,70 @@ export function getSandboxEnv(): SandboxEnv {
     maxStderrBytes: readPositiveInt("SANDBOX_MAX_STDERR_BYTES", 8 * 1024),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Render sandbox (F12/F14).
+//
+// A visual brief is rendered by headless Chromium, which needs more memory and
+// a larger /tmp than the Python child runner: a browser process plus a renderer
+// does not fit in 256 MB, and frames are written to the tmpfs as base64. These
+// are separate settings on purpose — the Python image stays lean, and raising
+// one runner's ceiling never loosens the other's.
+// ---------------------------------------------------------------------------
+
+export interface RenderSandboxEnv {
+  dockerBin: string;
+  /** Fully digest-pinned render image, e.g. `name@sha256:…`. */
+  imageRef: string;
+  imageDigest: string;
+  memoryMb: number;
+  cpus: string;
+  pidsLimit: number;
+  wallClockMs: number;
+  /** Base64 PNGs are ~1.33× their bytes; this bounds the whole NDJSON line. */
+  maxStdoutBytes: number;
+  maxStderrBytes: number;
+  tmpfsMb: number;
+  /** Ceiling on the wall-clock passed to each frame inside the page. */
+  frameTimeoutMs: number;
+}
+
+export function getRenderSandboxEnv(): RenderSandboxEnv {
+  const imageRef = process.env.RENDER_SANDBOX_IMAGE;
+
+  if (!imageRef) {
+    throw new ConfigurationError(
+      "Missing RENDER_SANDBOX_IMAGE (build with `npm run sandbox:render:build` and pin its digest)",
+    );
+  }
+
+  if (!DIGEST_PINNED.test(imageRef)) {
+    throw new ConfigurationError(
+      "RENDER_SANDBOX_IMAGE must be digest-pinned as name@sha256:<64 hex chars>; " +
+        "a tag would silently re-pull and change what past frames meant",
+    );
+  }
+
+  return {
+    dockerBin: process.env.DOCKER_BIN?.trim() || "docker",
+    imageRef,
+    imageDigest: `sha256:${imageRef.slice(imageRef.lastIndexOf("@sha256:") + 8)}`,
+    // Headless Chromium needs headroom the Python runner does not.
+    memoryMb: readPositiveInt("RENDER_SANDBOX_MEMORY_MB", 1024),
+    cpus: readPositiveDecimal("RENDER_SANDBOX_CPUS", "1"),
+    pidsLimit: readPositiveInt("RENDER_SANDBOX_PIDS_LIMIT", 256),
+    wallClockMs: readPositiveInt("RENDER_SANDBOX_WALL_CLOCK_MS", 90_000),
+    maxStdoutBytes: readPositiveInt(
+      "RENDER_SANDBOX_MAX_STDOUT_BYTES",
+      64 * 1024 * 1024,
+    ),
+    maxStderrBytes: readPositiveInt(
+      "RENDER_SANDBOX_MAX_STDERR_BYTES",
+      16 * 1024,
+    ),
+    // Chromium writes its profile and shared memory under /tmp; 256 MB is the
+    // smallest measured value that survives a 600-frame run.
+    tmpfsMb: readPositiveInt("RENDER_SANDBOX_TMPFS_MB", 256),
+    frameTimeoutMs: readPositiveInt("RENDER_SANDBOX_FRAME_TIMEOUT_MS", 10_000),
+  };
+}
