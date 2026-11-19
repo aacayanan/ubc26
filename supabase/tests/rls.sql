@@ -34,9 +34,9 @@ insert into public.llm_models (slug, name, openrouter_model_id) values
   ('model-a', 'Model A', 'org/model-a'),
   ('model-b', 'Model B', 'org/model-b');
 
-insert into public.challenges (slug, title, prompt, status) values
-  ('c-pub', 'Published challenge', 'Write code.', 'published'),
-  ('c-draft', 'Draft challenge', 'Work in progress.', 'draft');
+insert into public.challenges (slug, title, prompt, status, entry_point) values
+  ('c-pub', 'Published challenge', 'Write code.', 'published', 'solve'),
+  ('c-draft', 'Draft challenge', 'Work in progress.', 'draft', null);
 
 insert into public.test_cases (challenge_id, kind, ordinal, expected_output) values
   ((select id from public.challenges where slug = 'c-pub'), 'public', 1, 'ok'),

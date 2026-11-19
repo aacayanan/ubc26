@@ -1,9 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr";
-
 import { getClientEnv } from "@/lib/config/client";
 
-export function createSupabaseBrowserClient() {
-  const { supabaseUrl, supabasePublishableKey } = getClientEnv();
+let client: ReturnType<typeof createBrowserClient> | null = null;
 
-  return createBrowserClient(supabaseUrl, supabasePublishableKey);
+export function getBrowserSupabase() {
+  if (!client) {
+    const { supabaseUrl, supabasePublishableKey } = getClientEnv();
+    client = createBrowserClient(supabaseUrl, supabasePublishableKey);
+  }
+  return client;
 }

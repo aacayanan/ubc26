@@ -1,0 +1,290 @@
+import type { ReactNode } from "react";
+
+export function cx(
+  ...values: Array<string | false | null | undefined>
+): string {
+  return values.filter(Boolean).join(" ");
+}
+
+/* ------------------------------------------------------------------ *
+ * Surfaces
+ * ------------------------------------------------------------------ */
+
+export function Panel({
+  children,
+  className,
+  quiet = false,
+  interactive = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  quiet?: boolean;
+  interactive?: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        quiet ? "panel-quiet" : "panel",
+        interactive && "panel-interactive",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Status — a 6px dot and a word, never a filled neon chip.
+ * ------------------------------------------------------------------ */
+
+type Tone = "live" | "violet" | "ink" | "amber" | "idle";
+
+const toneClass: Record<Tone, string> = {
+  live: "dot-live",
+  violet: "dot-violet",
+  ink: "dot-ink",
+  amber: "dot-amber",
+  idle: "dot-idle",
+};
+
+export function Status({
+  tone = "idle",
+  pulse = false,
+  children,
+  className,
+}: {
+  tone?: Tone;
+  pulse?: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={cx("status", className)}>
+      <span
+        aria-hidden="true"
+        className={cx("dot", toneClass[tone], pulse && "dot-pulse")}
+      />
+      {children}
+    </span>
+  );
+}
+
+/** Map a round state to the accent that carries it. */
+export function roundTone(state: string): Tone {
+  switch (state) {
+    case "OPEN":
+      return "live";
+    case "LOCKED":
+    case "RUNNING":
+    case "EVALUATING":
+      return "violet";
+    case "SETTLED":
+      return "ink";
+    default:
+      return "idle";
+  }
+}
+
+export function roundLabel(state: string): string {
+  switch (state) {
+    case "OPEN":
+      return "Staking open";
+    case "LOCKED":
+      return "Locked";
+    case "RUNNING":
+      return "Rendering";
+    case "EVALUATING":
+      return "Judging";
+    case "SETTLED":
+      return "Settled";
+    case "ARCHIVED":
+      return "Archived";
+    case "CANCELLED":
+      return "Cancelled";
+    case "FAILED":
+      return "Failed";
+    default:
+      return state;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Meter
+ * ------------------------------------------------------------------ */
+
+export function Meter({
+  value,
+  className,
+  label,
+}: {
+  value: number;
+  className?: string;
+  label?: string;
+}) {
+  const pct = Math.max(0, Math.min(1, value)) * 100;
+  return (
+    <div
+      className={cx("meter", className)}
+      role="img"
+      aria-label={label ?? `${Math.round(pct)}%`}
+    >
+      <span style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Headings
+ * ------------------------------------------------------------------ */
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <header
+      className={cx(
+        "flex flex-wrap items-end justify-between gap-x-8 gap-y-4",
+        className,
+      )}
+    >
+      <div className="max-w-[62ch]">
+        <h1 className="t-title text-[clamp(1.9rem,3.6vw,2.5rem)] text-ink">
+          {title}
+        </h1>
+        {description ? (
+          <p className="t-body mt-3 text-[0.9375rem] text-muted">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className="flex items-center gap-3">{actions}</div>
+      ) : null}
+    </header>
+  );
+}
+
+export function SectionHeading({
+  children,
+  aside,
+  className,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "flex flex-wrap items-baseline justify-between gap-2",
+        className,
+      )}
+    >
+      <h2 className="t-title text-[1.0625rem] tracking-[-0.01em] text-ink">
+        {children}
+      </h2>
+      {aside}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Empty state — designed, never a shrug.
+ * ------------------------------------------------------------------ */
+
+export function EmptyState({
+  title,
+  children,
+  action,
+  className,
+}: {
+  title: string;
+  children?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "panel-quiet mx-auto flex w-full max-w-[46rem] flex-col items-center px-6 py-14 text-center",
+        className,
+      )}
+    >
+      <CrosshairMark />
+      <p className="mt-5 text-[0.9375rem] font-medium text-ink">{title}</p>
+      {children ? (
+        <p className="t-body mt-2 max-w-[46ch] text-sm text-muted">
+          {children}
+        </p>
+      ) : null}
+      {action ? <div className="mt-6">{action}</div> : null}
+    </div>
+  );
+}
+
+/** Authored mark: an aperture with halftone falloff. Not a unicode glyph. */
+export function CrosshairMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 40 40"
+      className={cx("size-10 text-faint", className)}
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="20" cy="20" r="12.5" stroke="currentColor" strokeWidth="1" />
+      <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.55" />
+      <path
+        d="M20 1.5v7M20 31.5v7M1.5 20h7M31.5 20h7"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <circle
+        cx="20"
+        cy="20"
+        r="19"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeDasharray="0.5 3.5"
+        opacity="0.5"
+      />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Readout — a labelled number, the instrument-panel atom.
+ * ------------------------------------------------------------------ */
+
+export function Readout({
+  label,
+  value,
+  suffix,
+  className,
+}: {
+  label: string;
+  value: ReactNode;
+  suffix?: string;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className="t-label text-[0.625rem] text-faint">{label}</p>
+      <p className="t-num mt-1.5 text-[1.375rem] text-ink">
+        {value}
+        {suffix ? (
+          <span className="ml-1 text-xs text-muted">{suffix}</span>
+        ) : null}
+      </p>
+    </div>
+  );
+}

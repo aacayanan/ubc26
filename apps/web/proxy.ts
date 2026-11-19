@@ -1,55 +1,68 @@
 import { createServerClient } from "@supabase/ssr";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-import { getClientEnv } from "@/lib/config/client";
+const PROTECTED = [
+  "/admin",
+  "/dashboard",
+  "/predictions",
+  "/profile",
+  "/link-wallet",
+];
 
-export default async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
-  const { supabaseUrl, supabasePublishableKey } = getClientEnv();
-  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        for (const { name, value } of cookiesToSet) {
-          request.cookies.set(name, value);
-        }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!supabaseUrl || !publishableKey) {
+    return response;
+  }
+
+  const supabase = createServerClient(supabaseUrl, publishableKey, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (list) => {
+        // Write refreshed tokens onto the request first: NextResponse snaps
+        // the override-headers (x-middleware-request-*) when constructed, so
+        // the recreated response below re-snapshots the updated headers.
+        list.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
         response = NextResponse.next({ request });
-        for (const { name, value, options } of cookiesToSet) {
+        list.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
-        }
+        });
       },
     },
   });
 
-  await supabase.auth.getUser();
+  // getUser() verifies the session server-side; an expired token is refreshed
+  // through setAll above before the verdict lands.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  if (path === "/admin" || path.startsWith("/admin/")) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const isProtected = PROTECTED.some(
+    (p) => path === p || path.startsWith(`${p}/`),
+  );
 
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  if (user && path === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  if (path === "/dashboard" || path.startsWith("/dashboard/")) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
+  if (!user && isProtected) {
+    const login = new URL("/login", request.url);
+    // Same-origin absolute path only (matches the login form's validation).
+    login.searchParams.set("next", path);
+    return NextResponse.redirect(login);
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/dashboard/:path*", "/auth/callback"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
