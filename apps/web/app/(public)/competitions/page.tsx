@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 interface Competition {
   id: string;
@@ -14,44 +13,21 @@ interface Competition {
 }
 
 export default function CompetitionsPage() {
-  const [competitions, setCompetitions] = useState<Competition[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/competitions
-    // const fetchCompetitions = async () => {
-    //   const res = await fetch("/api/competitions");
-    //   const data = await res.json();
-    //   setCompetitions(data);
-    // };
-    // fetchCompetitions();
-    setLoading(false);
-  }, []);
+  // TODO: load from API — GET /api/competitions
+  const competitions: Competition[] = [];
 
   const statusColors: Record<string, string> = {
-    OPEN:
-      "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+    OPEN: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
     LOCKED:
       "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
-    RUNNING:
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    RUNNING: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
     EVALUATING:
       "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
-    SETTLED:
-      "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    SETTLED: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
     ARCHIVED:
       "bg-zinc-100 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500",
-    CREATED:
-      "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+    CREATED: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   };
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading competitions…</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">

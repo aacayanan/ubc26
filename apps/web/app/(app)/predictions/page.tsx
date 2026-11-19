@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 interface PredictionRecord {
   id: string;
@@ -14,27 +13,8 @@ interface PredictionRecord {
 }
 
 export default function PredictionsPage() {
-  const [predictions, setPredictions] = useState<PredictionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/predictions?user_id=...
-    // const fetchPredictions = async () => {
-    //   const res = await fetch("/api/predictions");
-    //   const data = await res.json();
-    //   setPredictions(data);
-    // };
-    // fetchPredictions();
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading predictions…</p>
-      </div>
-    );
-  }
+  // TODO: load from API — GET /api/predictions?user_id=...
+  const predictions: PredictionRecord[] = [];
 
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">

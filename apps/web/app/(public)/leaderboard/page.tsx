@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 interface LeaderboardEntry {
   user_id: string;
   username: string;
@@ -12,29 +10,10 @@ interface LeaderboardEntry {
 }
 
 export default function LeaderboardPage() {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/leaderboard
-    // const fetchLeaderboard = async () => {
-    //   const res = await fetch("/api/leaderboard");
-    //   const data = await res.json();
-    //   setLeaderboard(data);
-    // };
-    // fetchLeaderboard();
-    setLoading(false);
-  }, []);
+  // TODO: load from API — GET /api/leaderboard
+  const leaderboard: LeaderboardEntry[] = [];
 
   const medals = ["🥇", "🥈", "🥉"];
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading leaderboard…</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">

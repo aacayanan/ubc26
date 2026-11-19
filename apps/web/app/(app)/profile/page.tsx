@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<{
+  // TODO: load from API — GET /api/user/profile
+  const user = null as {
     id: string;
     email: string;
     display_name: string;
@@ -11,36 +12,19 @@ export default function ProfilePage() {
     correct_predictions: number;
     streak: number;
     rounds_played: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/user/profile
-    // const fetchProfile = async () => {
-    //   const res = await fetch("/api/user/profile");
-    //   const data = await res.json();
-    //   setUser(data);
-    // };
-    // fetchProfile();
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading profile…</p>
-      </div>
-    );
-  }
+  } | null;
 
   if (!user) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-zinc-500">
           Not logged in.{" "}
-          <a href="/login" className="font-medium text-zinc-700 underline dark:text-zinc-300">
+          <Link
+            href="/login"
+            className="font-medium text-zinc-700 underline dark:text-zinc-300"
+          >
             Sign in
-          </a>
+          </Link>
         </p>
       </div>
     );
@@ -75,9 +59,7 @@ export default function ProfilePage() {
               <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                 {user.total_points}
               </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Points
-              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Points</p>
             </div>
             <div className="rounded-lg bg-zinc-50 p-3 text-center dark:bg-zinc-800/50">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">

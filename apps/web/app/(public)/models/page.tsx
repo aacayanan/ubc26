@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 interface ModelStats {
   model_id: string;
   model_name: string;
@@ -16,27 +14,8 @@ interface ModelStats {
 }
 
 export default function ModelsPage() {
-  const [models, setModels] = useState<ModelStats[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/models
-    // const fetchModels = async () => {
-    //   const res = await fetch("/api/models");
-    //   const data = await res.json();
-    //   setModels(data);
-    // };
-    // fetchModels();
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading models…</p>
-      </div>
-    );
-  }
+  // TODO: load from API — GET /api/models
+  const models: ModelStats[] = [];
 
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
