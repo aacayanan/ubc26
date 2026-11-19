@@ -63,7 +63,15 @@ Configure these when the corresponding integrations are implemented:
 
 - `OPENROUTER_API_KEY` - Private server-only API key
 - `SUPABASE_SERVICE_ROLE_KEY` - Private server-only Supabase key that
-  bypasses RLS (Supabase dashboard → Settings → API)
+  bypasses RLS (Supabase dashboard → Settings → API). Required from F13
+  on: sandbox result writes have no RLS write policy, so only the
+  service role can record evaluation results.
+
+OpenRouter calls have optional tuning knobs, all defaulted:
+`OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_MS` (60000),
+`OPENROUTER_MAX_ATTEMPTS` (3) and `OPENROUTER_FORFEIT_THRESHOLD` (3). The
+model lineup is not configured here — it is the active rows in the
+`llm_models` table, ordered by `sort_order`.
 
 Never commit real API keys or secrets.
 
@@ -144,6 +152,18 @@ npm run format:check
 Check formatting without changing files.
 
 ```bash
+npm test
+```
+
+Run unit tests with Vitest (no network needed). The live OpenRouter check is
+skipped unless `OPENROUTER_API_KEY` and `OPENROUTER_TEST_MODEL_ID` are set:
+
+```bash
+OPENROUTER_API_KEY=... OPENROUTER_TEST_MODEL_ID=... npx vitest run \
+  test/integration/openrouter.integration.test.ts --root apps/web
+```
+
+```bash
 npm run typecheck
 ```
 
@@ -166,11 +186,14 @@ linked project.
 
 ## Database
 
-The schema lives in `supabase/migrations/` — ten ordered SQL files covering
+The schema lives in `supabase/migrations/` — thirteen ordered SQL files covering
 users, wallets, model/challenge catalogs, rounds, predictions, evaluation,
 settlement, blockchain transactions, the RLS policies, and the profile-sync
-trigger that creates a `public.users` row for every new auth account. They apply
-cleanly in order to a fresh Supabase project via `npm run db:push`.
+trigger that creates a `public.users` row for every new auth account. The last
+three extend evaluation for the sandbox (F13: `challenges.entry_point`,
+`model_executions.sandbox_image`/`harness_protocol`) and for OpenRouter (F16:
+`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`). They
+apply cleanly in order to a fresh Supabase project via `npm run db:push`.
 
 Each new auth user gets its `public.users` row from the `on_auth_user_created`
 trigger in `20261118100900_profile_sync_and_funding_status.sql`. Without that
@@ -234,10 +257,37 @@ docker run --rm -p 3000:3000 --env-file apps/web/.env.local ai-showdown
 
 ### Notes
 
-- The evaluation sandbox (REQUIREMENTS.md F13) will run as a
-  separate container later; this image only packages the web app.
+- The evaluation sandbox lives in `sandbox/` and runs as its own
+  image. See [Sandbox](#sandbox) and
+  [`docs/sandbox-threat-model.md`](docs/sandbox-threat-model.md).
 - Never pass server-only keys (e.g. `OPENROUTER_API_KEY`) as
   `NEXT_PUBLIC_` variables.
+
+## Sandbox
+
+Every LLM-generated solution runs in a fresh container from `sandbox/`, never in
+the app process. The container has no network, a read-only rootfs, CPU/memory/
+process limits, and drops each test to an unprivileged uid. The load-bearing
+control is that **expected answers never enter the container** — it returns the
+solution's value and the host decides pass/fail, so a forged result can only
+substitute the solution's own answer.
+
+Build and pin the image:
+
+```bash
+npm run sandbox:build
+docker image inspect ai-showdown-sandbox:py3.12 \
+  --format '{{index .RepoDigests 0}}'
+```
+
+Put that digest-pinned reference in `apps/web/.env.local` as `SANDBOX_IMAGE`.
+The runner refuses a tag-only reference, because a tag re-pulls and would change
+what a past verdict meant.
+
+The runner needs access to a Docker daemon — a mounted socket locally, or a
+sidecar at deploy time (deployment host is still an open item, F28). Full
+control stack, measured attack results, and residual risks:
+[`docs/sandbox-threat-model.md`](docs/sandbox-threat-model.md).
 
 ## Architecture
 
@@ -246,6 +296,17 @@ authentication, competitions, evaluation, scoring, and blockchain.
 
 External integrations are separated into Supabase, OpenRouter,
 and Solana modules.
+
+The OpenRouter client (F16) lives in
+`lib/server/integrations/openrouter/`. Every model receives the same prompt
+from `lib/server/services/llm/prompt.ts`; each call records the exact model id,
+the generation params, the prompt-template version and a hash of the prompt
+text, plus latency and per-attempt diagnostics in `model_executions`. Timeouts,
+rate limits, unavailable models, malformed output and auth/credit failures are
+typed outcomes, not exceptions. Transient failures are retried up to
+`OPENROUTER_MAX_ATTEMPTS`; after `OPENROUTER_FORFEIT_THRESHOLD` failed attempts
+the model forfeits the round. The row-level `attempt` is the orchestration
+attempt (F17) and never advances because of an internal retry.
 
 The shared package contains reusable TypeScript definitions.
 

@@ -61,7 +61,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 
 ### M4 — LLM Orchestration & Scoring
 
-- F16. OpenRouter client: identical prompt + eval instructions to all models; records exact model ID, config, latency; handles timeout/unavailability (retry policy, model forfeit after N failures).
+- F16. OpenRouter client: identical prompt + eval instructions to all models; records exact model ID, config, latency; handles timeout/unavailability (retry policy, model forfeit after N failures). **Done (2026-11-19)** — `apps/web/lib/server/integrations/openrouter/client.ts` returns typed outcomes (timeout, network, rate limited, provider error, unavailable model, auth, credits, invalid request, malformed response) and retries transient failures up to 3 attempts with backoff; the lineup comes from active `llm_models` rows; `services/llm/generate.ts` writes `model_executions` with the model/params snapshot, prompt-template version + hash, latency, per-attempt diagnostics and `failure_kind`, and marks a model forfeited at the failure threshold. Unit tests via Vitest; live call test gated behind `OPENROUTER_API_KEY`. Final model IDs remain open item 2 (a `llm_models` seed).
 - F17. Orchestration pipeline: after `LOCKED`, reveal challenge → call models → sandbox each solution → evaluate → store executions + test results.
 - F18. Scoring & settlement: determine category winners (correctness gates speed/length), score user predictions, award points; idempotent — interrupted settlement never double-scores.
 - F19. Results view: winning solutions side-by-side, per-category metrics, why each model won/forfeited.
