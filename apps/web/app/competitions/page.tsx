@@ -16,33 +16,53 @@ interface Competition {
 export default function CompetitionsPage() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // TODO: fetch from API — GET /api/competitions
-    // const fetchCompetitions = async () => {
-    //   const res = await fetch("/api/competitions");
-    //   const data = await res.json();
-    //   setCompetitions(data);
-    // };
-    // fetchCompetitions();
-    setLoading(false);
+    let active = true;
+
+    async function fetchCompetitions() {
+      try {
+        const response = await fetch("/api/competitions");
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error?.message ?? "Could not load competitions");
+        }
+        if (active) {
+          setCompetitions(body.competitions);
+        }
+      } catch (fetchError: unknown) {
+        if (active) {
+          setError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Could not load competitions",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void fetchCompetitions();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const statusColors: Record<string, string> = {
-    OPEN:
-      "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+    OPEN: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
     LOCKED:
       "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
-    RUNNING:
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    RUNNING: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
     EVALUATING:
       "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
-    SETTLED:
-      "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    SETTLED: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
     ARCHIVED:
       "bg-zinc-100 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500",
-    CREATED:
-      "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+    CREATED: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   };
 
   if (loading) {
@@ -62,7 +82,11 @@ export default function CompetitionsPage() {
           </h1>
         </div>
 
-        {competitions.length === 0 ? (
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-12 text-center dark:border-red-900 dark:bg-red-950/30">
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        ) : competitions.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               No competitions available yet. Check back soon.

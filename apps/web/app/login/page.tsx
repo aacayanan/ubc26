@@ -1,8 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+
 export default function LoginPage() {
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -13,9 +18,25 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      // TODO: call supabase auth
-      // const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) throw signInError;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user)
+        throw new Error("Login succeeded but no user session was found");
+
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profileError) throw profileError;
+
+      router.replace(profile?.role === "admin" ? "/admin" : "/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -27,8 +48,13 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      // TODO: call supabase auth
-      // await supabase.auth.signInWithOAuth({ provider });
+      const { error: signInError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (signInError) throw signInError;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Social login failed");
     } finally {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 
 interface CompetitionDetail {
@@ -20,15 +21,13 @@ interface CompetitionDetail {
   } | null;
 }
 
-export const dynamic = "force-dynamic";
-
-export default function CompetitionDetailPage() {
+function CompetitionDetailContent() {
   const params = useParams();
   const router = useRouter();
   const compId = params.id as string;
 
   const [competition, setCompetition] = useState<CompetitionDetail | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,7 +69,9 @@ export default function CompetitionDetailPage() {
       // });
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to submit prediction");
+      setError(
+        err instanceof Error ? err.message : "Failed to submit prediction",
+      );
     } finally {
       setSaving(false);
     }
@@ -116,8 +117,7 @@ export default function CompetitionDetailPage() {
                 {competition.title}
               </h1>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Deadline:{" "}
-                {new Date(competition.deadline).toLocaleString()}
+                Deadline: {new Date(competition.deadline).toLocaleString()}
               </p>
             </div>
             <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
@@ -146,7 +146,7 @@ export default function CompetitionDetailPage() {
           </p>
         </div>
 
-        {(competition.status === "OPEN" && !isSubmitted) ? (
+        {competition.status === "OPEN" && !isSubmitted ? (
           <form
             onSubmit={handleSubmit}
             className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
@@ -227,5 +227,19 @@ export default function CompetitionDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CompetitionDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-zinc-500">Loading competition…</p>
+        </div>
+      }
+    >
+      <CompetitionDetailContent />
+    </Suspense>
   );
 }
