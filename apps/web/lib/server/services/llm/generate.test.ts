@@ -31,11 +31,15 @@ const MODEL: LLMModelRecord = {
 };
 
 const CHALLENGE: GenerationChallenge = {
-  title: "Sum a list",
-  prompt: "Return the sum of a list.",
+  title: "Isometric donut spinning in a loop",
+  prompt: "Render a donut in an isometric projection.",
+  styleConstraints: "Two flat fills on a void background.",
+  entryPoint: "drawFrame",
+  targetDurationMs: 1200,
+  frameCount: 36,
+  frameWidth: 320,
+  frameHeight: 240,
   starterCode: "",
-  entryPoint: "total",
-  language: "python",
 };
 
 function clientReturning(outcome: GenerationOutcome): OpenRouterClient {
@@ -81,7 +85,9 @@ beforeEach(() => {
 describe("generateModelSolution", () => {
   it("writes a running row first, snapshots the config, and records success", async () => {
     const result = await run(
-      clientReturning(success("def total(values):\n    return sum(values)")),
+      clientReturning(
+        success("function drawFrame(t, ctx) {\n  ctx.fillRect(0, 0, 1, 1);\n}"),
+      ),
     );
 
     const written = persist.upsertExecution.mock.calls[0][0];
@@ -94,15 +100,15 @@ describe("generateModelSolution", () => {
       status: "running",
     });
     expect(written.config.params).toEqual({ temperature: 0 });
-    expect(written.config.promptTemplateVersion).toBe("generation-v1");
+    expect(written.config.promptTemplateVersion).toBe("render-v1");
     expect(written.config.promptSha256).toMatch(/^[0-9a-f]{64}$/);
 
     expect(result.status).toBe("succeeded");
-    expect(result.code).toContain("def total");
+    expect(result.code).toContain("function drawFrame");
 
     const [, status, patch] = persist.markExecutionStatus.mock.calls.at(-1)!;
     expect(status).toBe("succeeded");
-    expect(patch.solutionCode).toContain("def total");
+    expect(patch.solutionCode).toContain("function drawFrame");
     expect(patch.latencyMs).toBe(42);
     expect(patch.attemptCount).toBe(1);
     expect(patch.providerRequestId).toBe("gen-1");

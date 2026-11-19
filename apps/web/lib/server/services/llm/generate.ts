@@ -15,7 +15,7 @@ import {
 } from "@/lib/server/services/evaluation/persist";
 import {
   buildGenerationMessages,
-  extractPythonCode,
+  extractRenderCode,
   hashMessages,
   PROMPT_TEMPLATE_VERSION,
   type GenerationChallenge,
@@ -135,7 +135,7 @@ export async function generateModelSolution(
         });
       }
 
-      const extraction = extractPythonCode(
+      const extraction = extractRenderCode(
         outcome.content,
         challenge.entryPoint,
       );
