@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **AI Showdown** — a consumer-facing prediction platform where users predict which LLMs (GPT, Claude, Gemini) will win standardized Python coding challenges, judged on accuracy (test cases passed), execution speed, and code length. Built for the UBC 2026 Hackathon, Track 03 (Consumer Applications), on Solana Devnet. Submission deadline: **November 20, 2026, 12:00 PM CST**.
 
-Repo state: monorepo scaffolded as of 2026-11-18 — Next.js app in `apps/web`, shared types in `packages/shared`, lint/format tooling, production Dockerfile (standalone output), Supabase schema in `supabase/migrations/` (all core entities, constraints, RLS policies) with assertion tests in `supabase/tests/` and CLI scripts `db:link`/`db:push`. Detailed requirements and build order live in `REQUIREMENTS.md` (decisions log, milestones M0–M7, open items); follow that ordering when implementing.
+Repo state: monorepo scaffolded 2026-11-18, M0 done and M1 accounts/shell done (F4, F5 shipped; F6 profile sync partial) — Next.js app in `apps/web`, shared types in `packages/shared`, lint/format tooling, production Dockerfile (standalone output), Supabase schema in `supabase/migrations/` (all core entities, constraints, RLS policies, profile-sync trigger) with assertion tests in `supabase/tests/` and CLI scripts `db:link`/`db:push`. App routes are split into `(public)` and `(app)` route groups; auth is gated per-request by `apps/web/proxy.ts` (Next 16's renamed middleware) plus a Suspense-wrapped `requireUser()` in `app/(app)/layout.tsx`. Detailed requirements and build order live in `REQUIREMENTS.md` (decisions log, milestones M0–M7, open items); follow that ordering when implementing.
 
 ## Non-negotiable constraints
 
@@ -24,6 +24,23 @@ On-chain (Solana): prediction commitments (hashes), competition IDs and deadline
 Off-chain (PostgreSQL): user data, generated code, test results, large datasets, private information.
 
 Blockchain verification guarantees that commitments existed before the deadline and were not altered. It does **not** verify that model execution or scoring was honest — that still depends on the trusted backend. Document this distinction in any user-facing or judge-facing material.
+
+## Accounts, wallets, and the join gate
+
+- Identity comes from Supabase auth. Sign in with Solana produces a
+  wallet-identified account; email sign-up prompts a one-time wallet link and
+  otherwise continues in practice mode.
+- An email user's wallet link is a `public.wallets` row, not an auth identity —
+  supabase-js cannot attach a Web3 identity to an existing email user.
+- `public.users.funded` is **derived**: true exactly when a `public.wallets` row
+  exists, maintained by trigger. Clients hold no grant on it, so nothing can
+  promote itself. `practice_mode` is self-service because it can only reduce
+  access.
+- **Rounds are created by the admin/server side. Users never create rounds;
+  they join them.** Only a funded account not in `practice_mode` joining starts
+  a prompt session. Practice accounts browse and observe.
+- No money moves in the MVP. "Funded" marks eligibility to add funds later and
+  does not mean a deposit was made.
 
 ## Competition lifecycle (state machine)
 
@@ -44,7 +61,7 @@ Rules that must hold in code:
 
 ## Locked stack decisions
 
-- **Auth + DB**: Supabase all-in-one (Postgres + auth + RLS). Login-first (email/social); Phantom wallet link is optional, needed only for on-chain commitment verification.
+- **Auth + DB**: Supabase all-in-one (Postgres + auth + RLS). Login-first via email/password or Sign in with Solana (Phantom, the social provider) — decided 2026-11-18 since the product is Solana-native. On-chain commitment verification still needs the wallet; it is no longer merely an optional link.
 - **LLM access**: OpenRouter — one integration, model IDs in config. Lineup: the cheapest three capable models, chosen at config time.
 - **Sandbox**: fresh Docker container per evaluation run (`--network-none`, CPU/memory/time limits), deployed on a container-capable host (Fly.io / Railway / Render) — not Vercel.
 - **Challenges**: hybrid — hand-seeded bank for the MVP; a generation pipeline may expand the bank, but challenges are never generated live mid-competition.
