@@ -29,6 +29,13 @@
 -- client correctly rejects. The cap is set high enough that reasoning finishes
 -- and content is emitted. Temperature is 0 so the same brief tends to the same
 -- render, which keeps the demo reproducible.
+--
+-- LATENCY: measured 6–8 s per call on an idle free tier, but a free model is
+-- queued behind other users and a single request was observed timing out at
+-- 90 s twice in a row. That is provider congestion, not a model fault, and the
+-- F16 client retries it — but the demo budget is 2–3 minutes end to end, so
+-- OPENROUTER_TIMEOUT_MS and OPENROUTER_MAX_ATTEMPTS should be revisited before
+-- the recording. See REQUIREMENTS.md open item 2.
 -- ---------------------------------------------------------------------------
 insert into public.llm_models
   (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
@@ -60,10 +67,10 @@ values
     true,
     3
   )
-on conflict (openrouter_model_id) do update set
-  slug = excluded.slug,
+on conflict (slug) do update set
   name = excluded.name,
   provider = excluded.provider,
+  openrouter_model_id = excluded.openrouter_model_id,
   config = excluded.config,
   is_active = excluded.is_active,
   sort_order = excluded.sort_order;
@@ -88,10 +95,10 @@ values
     false,
     100
   )
-on conflict (openrouter_model_id) do update set
-  slug = excluded.slug,
+on conflict (slug) do update set
   name = excluded.name,
   provider = excluded.provider,
+  openrouter_model_id = excluded.openrouter_model_id,
   config = excluded.config,
   -- Deliberately NOT re-activating: F31 owns that switch. Re-running this seed
   -- must never promote the judge into the competitor lineup.
