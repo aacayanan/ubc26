@@ -529,6 +529,19 @@ function ModelPanel({
           </ul>
         </details>
       ) : null}
+
+      {/* The code itself: shown as text, never executed here. The replay above
+          runs it only inside the quarantined iframe; this is for reading. */}
+      {model.solution_code ? (
+        <details className="mt-3">
+          <summary className="t-label cursor-pointer text-[0.5625rem] text-muted">
+            Code
+          </summary>
+          <pre className="mt-2 max-h-72 overflow-auto rounded-lg border border-hairline bg-void p-3 text-[0.625rem] leading-relaxed text-muted">
+            <code>{model.solution_code}</code>
+          </pre>
+        </details>
+      ) : null}
     </Panel>
   );
 }
