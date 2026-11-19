@@ -44,7 +44,7 @@ Rules that must hold in code:
 
 ## Locked stack decisions
 
-- **Auth + DB**: Supabase all-in-one (Postgres + auth + RLS). Login-first (email/social); Phantom wallet link is optional, needed only for on-chain commitment verification.
+- **Auth + DB**: Supabase all-in-one (Postgres + auth + RLS). Login-first via email/password or Sign in with Solana (Phantom, the social provider) — decided 2026-11-18 since the product is Solana-native. On-chain commitment verification still needs the wallet; it is no longer merely an optional link.
 - **LLM access**: OpenRouter — one integration, model IDs in config. Lineup: the cheapest three capable models, chosen at config time.
 - **Sandbox**: fresh Docker container per evaluation run (`--network-none`, CPU/memory/time limits), deployed on a container-capable host (Fly.io / Railway / Render) — not Vercel.
 - **Challenges**: hybrid — hand-seeded bank for the MVP; a generation pipeline may expand the bank, but challenges are never generated live mid-competition.

@@ -12,7 +12,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 | Challenge source | Hybrid: hand-seeded bank for MVP; generation pipeline to expand the bank later (never generated live mid-competition) | **Locked** |
 | LLM lineup | Cheapest three capable models on OpenRouter, chosen at config time; run cost kept near zero during testing | **Locked** |
 | Rewards | Points / leaderboard only. No tokens, no NFTs, no real money | **Locked** |
-| Auth flow | Login-first via Supabase (email/social). Phantom wallet link optional, only needed for on-chain commitment verification | **Locked** |
+| Auth flow | Login-first via Supabase: email/password, plus Sign in with Solana (Phantom) as the social provider. Decided 2026-11-18 — the product is Solana-native, so the wallet is a first-class identity rather than an optional link | **Locked** |
 | Solana scope | Deferred — decide between Anchor program / lightweight tx records / full on-chain before Milestone 5 starts | **Gated** |
 | Frontend stack | Next.js (TypeScript) + Tailwind — confirmed at scaffold time | **Locked** |
 | App packaging | Production Dockerfile at repo root (Next.js standalone output); deploy host still open | **Locked** |
@@ -36,7 +36,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 - F3. Structured logging + consistent error-handling convention from the first commit. **Done (2026-11-18)** — typed application errors, structured redacted logs, correlation IDs, shared API/background wrappers, and a consistent API error response shape are implemented in `apps/web/lib/server/`.
 
 ### M1 — Accounts & Shell
-- F4. Supabase auth (email + one social provider), session handling, protected routes.
+- F4. Supabase auth (email/password + Sign in with Solana via Phantom), session handling, protected routes.
 - F5. App shell: landing page + logged-in dashboard layout.
 - F6. User profile record sync (Supabase auth → Users table), points balance display (starts at 0).
 
@@ -44,7 +44,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 - F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`.
 - F8. Admin/internal path to create a competition round (challenge, participating models, prediction deadline).
 - F9. Dashboard lists open competitions: challenge preview, models, deadline countdown, potential points.
-- F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions.
+- F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions. Joining a round starts a prompt session, and only funded accounts (linked Solana wallet, not in practice_mode) may join live; practice accounts browse and observe.
 - F11. Prediction locking at deadline (transition to `LOCKED`), idempotent, survives restarts.
 
 ### M3 — Challenge Bank & Sandbox

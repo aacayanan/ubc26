@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface CompetitionDetail {
   id: string;
@@ -20,17 +20,11 @@ interface CompetitionDetail {
   } | null;
 }
 
-export const dynamic = "force-dynamic";
-
 export default function CompetitionDetailPage() {
-  const params = useParams();
   const router = useRouter();
-  const compId = params.id as string;
 
-  const [competition, setCompetition] = useState<CompetitionDetail | null>(
-    null
-  );
-  const [loading, setLoading] = useState(true);
+  // TODO: load from API — GET /api/competitions/[id]
+  const competition = null as CompetitionDetail | null;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,20 +32,6 @@ export default function CompetitionDetailPage() {
   const [accuracyPick, setAccuracyPick] = useState<string>("");
   const [speedPick, setSpeedPick] = useState<string>("");
   const [lengthPick, setLengthPick] = useState<string>("");
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/competitions/[id]
-    // const fetchCompetition = async () => {
-    //   const res = await fetch(`/api/competitions/${compId}`);
-    //   const data = await res.json();
-    //   setCompetition(data);
-    //   setAccuracyPick(data.user_prediction?.accuracy ?? "");
-    //   setSpeedPick(data.user_prediction?.speed ?? "");
-    //   setLengthPick(data.user_prediction?.code_length ?? "");
-    // };
-    // fetchCompetition();
-    setLoading(false);
-  }, [compId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,18 +50,18 @@ export default function CompetitionDetailPage() {
       // });
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to submit prediction");
+      setError(
+        err instanceof Error ? err.message : "Failed to submit prediction",
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading || !competition) {
+  if (!competition) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">
-          {loading ? "Loading…" : "Competition not found."}
-        </p>
+        <p className="text-sm text-zinc-500">Competition not found.</p>
       </div>
     );
   }
@@ -116,8 +96,7 @@ export default function CompetitionDetailPage() {
                 {competition.title}
               </h1>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Deadline:{" "}
-                {new Date(competition.deadline).toLocaleString()}
+                Deadline: {new Date(competition.deadline).toLocaleString()}
               </p>
             </div>
             <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
@@ -146,7 +125,7 @@ export default function CompetitionDetailPage() {
           </p>
         </div>
 
-        {(competition.status === "OPEN" && !isSubmitted) ? (
+        {competition.status === "OPEN" && !isSubmitted ? (
           <form
             onSubmit={handleSubmit}
             className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"

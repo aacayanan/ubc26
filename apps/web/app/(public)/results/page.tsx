@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 interface ResultEntry {
   competition_id: string;
   competition_title: string;
@@ -13,27 +11,8 @@ interface ResultEntry {
 }
 
 export default function ResultsPage() {
-  const [results, setResults] = useState<ResultEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: fetch from API — GET /api/results
-    // const fetchResults = async () => {
-    //   const res = await fetch("/api/results");
-    //   const data = await res.json();
-    //   setResults(data);
-    // };
-    // fetchResults();
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-zinc-500">Loading results…</p>
-      </div>
-    );
-  }
+  // TODO: load from API — GET /api/results
+  const results: ResultEntry[] = [];
 
   return (
     <div className="flex flex-1 items-start justify-center px-4 py-10 sm:px-6">
