@@ -10,7 +10,10 @@ import type { BriefRecord } from "@/lib/server/services/briefs/briefs";
 import { assessRender } from "@/lib/server/services/evaluation/observe";
 import type { CheckOutcome } from "@/lib/server/services/evaluation/gate";
 import { markExecutionStatus } from "@/lib/server/services/evaluation/persist";
-import { upsertRenderedArtifact } from "@/lib/server/services/evaluation/artifacts";
+import {
+  upsertRenderedArtifact,
+  type StoredFrame,
+} from "@/lib/server/services/evaluation/artifacts";
 
 /**
  * Render one model's generated code and gate the result (F14).
@@ -57,6 +60,11 @@ export interface EvaluateArtifactResult {
   framesTruncated: boolean;
   /** Infrastructure failure only; a failed gate is not a failed run. */
   unavailable: boolean;
+  /**
+   * The stored frames, for the judge stage to use without a second read. Empty
+   * when the render produced nothing.
+   */
+  frames: StoredFrame[];
 }
 
 /** Build the render job for model code from a brief. */
@@ -156,6 +164,7 @@ export async function evaluateArtifact(
         framesStored: stored.framesStored,
         framesTruncated: stored.framesTruncated,
         unavailable: container.unavailable,
+        frames: assessment.record?.frames ?? [],
       };
     },
   );

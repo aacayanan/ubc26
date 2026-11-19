@@ -53,7 +53,9 @@ export type TxStatus = "pending" | "confirmed" | "failed" | "timeout";
 
 // Mirrors the public.execution_run_type enum in
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.
-export type ExecutionRunType = "generation" | "warmup" | "benchmark";
+// `judge` (F31/F17, migration 20261119000700) is the vision model's ruling call;
+// its `subject_model_id` names the competitor whose frames it saw.
+export type ExecutionRunType = "generation" | "warmup" | "benchmark" | "judge";
 
 // Mirrors the public.test_kind enum in
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.
@@ -213,4 +215,55 @@ export interface RenderResultRecord {
   /** An uncaught page error, if the page threw while drawing. */
   pageError: string | null;
   frames: RenderedFrame[];
+}
+
+// ---------------------------------------------------------------------------
+// F17 chunked generation.
+//
+// Generation is split into chunks so the audience can watch the renderer take
+// shape. The policy below is the fairness rule (REQUIREMENTS.md non-negotiable
+// #10): every model in a round receives the identical brief, chunk policy and
+// per-chunk token cap, and the policy is recorded on each execution so a run
+// stays explainable after the constants change.
+// ---------------------------------------------------------------------------
+
+export interface ChunkPolicy {
+  /** Ceiling on `max_tokens` for one chunk's request. */
+  maxTokensPerChunk: number;
+  /**
+   * Hard stop on chunks per model. The last chunk is asked to finish the
+   * function, so a model that would otherwise ramble is bounded rather than
+   * left generating until the client times out.
+   */
+  maxChunks: number;
+  /** Template version string, stored with each chunk (reproducibility). */
+  promptTemplateVersion: string;
+}
+
+/** One chunk as stored: what it added, and what it cost. */
+export interface StoredChunk {
+  chunkIndex: number;
+  source: string;
+}
+
+// ---------------------------------------------------------------------------
+// F31 judge protocol.
+//
+// The judge is asked for one strict JSON object; the host parses and validates
+// it rather than trusting prose. A reply that is not that object is a typed
+// `malformed_response` failure, never a silent pass or fail.
+// ---------------------------------------------------------------------------
+
+export interface JudgeCriterionVerdict {
+  id: string;
+  question: string;
+  passed: boolean;
+  reason: string;
+}
+
+export interface JudgeRuling {
+  /** Overall conformance: every criterion passing is what `true` means. */
+  conformed: boolean;
+  reason: string;
+  criteria: JudgeCriterionVerdict[];
 }

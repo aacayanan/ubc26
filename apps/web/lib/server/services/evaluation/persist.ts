@@ -39,6 +39,8 @@ export interface ExecutionUpsert {
   harnessProtocol?: number;
   status: ExecutionStatus;
   solutionCode?: string | null;
+  /** F31: for `run_type = 'judge'`, the competitor whose frames were judged. */
+  subjectModelId?: string | null;
   // F16 diagnostics. All optional so the F13 caller is unaffected.
   attemptCount?: number;
   providerRequestId?: string | null;
@@ -99,6 +101,7 @@ export async function upsertExecution(
         config: row.config,
         status: row.status,
         solution_code: row.solutionCode ?? null,
+        subject_model_id: row.subjectModelId ?? null,
         sandbox_image: row.sandboxImage ?? null,
         harness_protocol: row.harnessProtocol ?? null,
         attempt_count: row.attemptCount ?? 1,

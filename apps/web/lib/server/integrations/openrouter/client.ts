@@ -33,9 +33,24 @@ const MAX_PROVIDER_MESSAGE_CHARS = 200;
 // catalog edit must not be able to retarget the request or change the prompt.
 const RESERVED_PARAM_KEYS = new Set(["model", "messages", "stream"]);
 
+/**
+ * One content part of a multimodal message.
+ *
+ * Only what the pipeline actually sends is modelled: text, and an image as a
+ * data URL. The judge (F31) is the one caller that needs images, and it embeds
+ * them because the sandbox has no network — an `https:` image URL would be a
+ * request the judge cannot make.
+ */
+export type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export interface ChatMessage {
-  role: "system" | "user";
-  content: string;
+  // `assistant` exists for F17's chunked continuation: the code so far is
+  // carried back to the model as its own previous turn. `content` is an array
+  // only for vision calls.
+  role: "system" | "user" | "assistant";
+  content: string | ChatContentPart[];
 }
 
 export interface OpenRouterRequest {

@@ -263,3 +263,29 @@ export async function getBriefVersion(
 
   return toBrief(data as BriefRow);
 }
+
+/**
+ * A brief by row id.
+ *
+ * A round pins `challenge_id` — a specific *version* — so the pipeline must read
+ * the brief it was opened against rather than the newest published version of
+ * the same slug. Returning null (rather than throwing) lets the caller report
+ * "this round's brief is missing" as its own conflict.
+ */
+export async function getBriefById(
+  challengeId: string,
+  supabase: SupabaseClient = getServiceRoleSupabase(),
+): Promise<BriefRecord | null> {
+  const { data, error } = await supabase
+    .from("challenges")
+    .select(BRIEF_COLUMNS)
+    .eq("id", challengeId)
+    .eq("language", "javascript")
+    .maybeSingle();
+
+  if (error) {
+    throw new InternalError("Failed to read the brief", error);
+  }
+
+  return data ? toBrief(data as BriefRow) : null;
+}

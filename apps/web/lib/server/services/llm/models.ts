@@ -25,7 +25,11 @@ export interface LLMModelRecord {
   openrouterModelId: string;
   config: Record<string, unknown>;
   sortOrder: number;
+  /** `competitor` renders for the crowd; `judge` rules on renders (F31). */
+  role: LLMModelRole;
 }
+
+export type LLMModelRole = "competitor" | "judge";
 
 interface LLMModelRow {
   id: string;
@@ -35,10 +39,11 @@ interface LLMModelRow {
   openrouter_model_id: string;
   config: unknown;
   sort_order: number;
+  role: LLMModelRole;
 }
 
 const COLUMNS =
-  "id, slug, name, provider, openrouter_model_id, config, sort_order";
+  "id, slug, name, provider, openrouter_model_id, config, sort_order, role";
 
 function toRecord(row: LLMModelRow): LLMModelRecord {
   const config =
@@ -54,9 +59,19 @@ function toRecord(row: LLMModelRow): LLMModelRecord {
     openrouterModelId: row.openrouter_model_id,
     config,
     sortOrder: row.sort_order,
+    // Every row predating F31 defaults to `competitor` in the database, so this
+    // cannot silently hide an existing model from the lineup.
+    role: row.role,
   };
 }
 
+/**
+ * The competitors, in stable order.
+ *
+ * `role = 'competitor'` is what keeps the judge out. Without it an active judge
+ * row would be handed the brief and compete as a fourth model — the exact
+ * accident the seed used to prevent by keeping the judge inactive.
+ */
 export async function getActiveLineup(
   supabase: SupabaseClient = getServiceRoleSupabase(),
 ): Promise<LLMModelRecord[]> {
@@ -64,6 +79,7 @@ export async function getActiveLineup(
     .from("llm_models")
     .select(COLUMNS)
     .eq("is_active", true)
+    .eq("role", "competitor")
     // `sort_order` alone is not a stable order when two rows share a value.
     .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
@@ -75,6 +91,33 @@ export async function getActiveLineup(
   return ((data ?? []) as LLMModelRow[]).map(toRecord);
 }
 
+/**
+ * The judge, or null when none is seated.
+ *
+ * Configurable data, not code (F31): the pipeline asks for "the active judge"
+ * and never names a model. A database constraint guarantees at most one, so
+ * ordering is a formality rather than a choice.
+ */
+export async function getActiveJudge(
+  supabase: SupabaseClient = getServiceRoleSupabase(),
+): Promise<LLMModelRecord | null> {
+  const { data, error } = await supabase
+    .from("llm_models")
+    .select(COLUMNS)
+    .eq("is_active", true)
+    .eq("role", "judge")
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new InternalError("Failed to load the judge model", error);
+  }
+
+  return data ? toRecord(data as LLMModelRow) : null;
+}
+
 export async function getLineupModel(
   slug: string,
   supabase: SupabaseClient = getServiceRoleSupabase(),
@@ -84,6 +127,7 @@ export async function getLineupModel(
     .select(COLUMNS)
     .eq("slug", slug)
     .eq("is_active", true)
+    .eq("role", "competitor")
     .maybeSingle();
 
   if (error) {

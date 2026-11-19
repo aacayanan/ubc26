@@ -28,6 +28,7 @@ const MODEL: LLMModelRecord = {
   openrouterModelId: "test/model-a",
   config: { temperature: 0 },
   sortOrder: 1,
+  role: "competitor",
 };
 
 const CHALLENGE: GenerationChallenge = {
