@@ -118,7 +118,7 @@ categories).
 - F8. Admin/internal path to create a round (brief, participating models, prediction deadline). **Done (2026-11-19)** — role-aware admin dashboard/API, atomic validated competition creation, and OPEN competition discovery are implemented.
 - F9. Dashboard lists open rounds: brief preview, models, deadline countdown, live pool odds.
 - F10. Prediction submission: stake points on a model; server-side validation rejects late, duplicate or over-balance stakes. Only funded, non-practice accounts join live. **Enforcement gap:** M1 ships this as UI copy and a derived `funded` column only — the join endpoint must reject unfunded/practice accounts at the API layer, and RLS must scope inserts.
-- F11. Lock predictions at the deadline (transition to `LOCKED`), idempotent, survives restarts.
+- F11. Lock predictions at the deadline (transition to `LOCKED`), idempotent, survives restarts. **Done (2026-11-19)** — migration `20261118101400` adds `public.lock_due_rounds(now, limit, reason)`, which locks every due `OPEN` round in one transaction using `for update skip locked` and the existing audited `transition_round` RPC (repeat of target status = no-op). `services/competitions/lock.ts` wraps it (`lockDueRounds`, `listRoundsAwaitingRun` for restart-safe F17 pickup); `POST /api/internal/jobs/lock-rounds` is the trigger, gated by `INTERNAL_JOB_SECRET` (fails closed). This is the "betting window" clock in the two-clocks rule: it closes stakes before any render exists. Unit tests in `lock.test.ts`; SQL assertions in `supabase/tests/constraints.sql`.
 
 ### M3 — Visual Challenge Bank & Sandbox _(re-scoped 2026-11-19)_
 

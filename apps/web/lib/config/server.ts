@@ -12,6 +12,16 @@ export interface ServiceRoleEnv {
   supabaseServiceRoleKey: string;
 }
 
+export interface InternalJobEnv {
+  /**
+   * Shared secret for the internal job endpoints (F11 deadline lock today;
+   * the F17 pipeline trigger later). Unset means the endpoints refuse to run,
+   * so an unconfigured deployment fails closed instead of accepting anonymous
+   * calls.
+   */
+  internalJobSecret: string;
+}
+
 export function getServerEnv(): ServerEnv {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
@@ -44,4 +54,14 @@ export function getServiceRoleEnv(): ServiceRoleEnv {
     supabaseUrl,
     supabaseServiceRoleKey,
   };
+}
+
+export function getInternalJobEnv(): InternalJobEnv {
+  const internalJobSecret = process.env.INTERNAL_JOB_SECRET;
+
+  if (!internalJobSecret) {
+    throw new ConfigurationError("Missing INTERNAL_JOB_SECRET");
+  }
+
+  return { internalJobSecret };
 }

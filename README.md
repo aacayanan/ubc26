@@ -77,6 +77,9 @@ Configure these when the corresponding integrations are implemented:
   bypasses RLS (Supabase dashboard → Settings → API). Required from F13
   on: sandbox result writes have no RLS write policy, so only the
   service role can record evaluation results.
+- `INTERNAL_JOB_SECRET` - Private server-only shared secret for the internal
+  endpoints under `/api/internal/jobs` (F11 deadline lock). Required for the
+  lock job; if unset the endpoints refuse every call (fail closed).
 
 OpenRouter calls have optional tuning knobs, all defaulted:
 `OPENROUTER_BASE_URL`, `OPENROUTER_TIMEOUT_MS` (60000),
@@ -197,14 +200,15 @@ linked project.
 
 ## Database
 
-The schema lives in `supabase/migrations/` — thirteen ordered SQL files covering
+The schema lives in `supabase/migrations/` — fourteen ordered SQL files covering
 users, wallets, model/challenge catalogs, rounds, predictions, evaluation,
 settlement, blockchain transactions, the RLS policies, and the profile-sync
 trigger that creates a `public.users` row for every new auth account. The last
-three extend evaluation for the sandbox (F13: `challenges.entry_point`,
-`model_executions.sandbox_image`/`harness_protocol`) and for OpenRouter (F16:
-`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`). They
-apply cleanly in order to a fresh Supabase project via `npm run db:push`.
+four extend evaluation for the sandbox (F13: `challenges.entry_point`,
+`model_executions.sandbox_image`/`harness_protocol`), for OpenRouter (F16:
+`provider_request_id`, `attempt_count`, `failure_kind`, `response_meta`), and for
+deadline locking (F11: `lock_due_rounds`, service-role only). They apply cleanly
+in order to a fresh Supabase project via `npm run db:push`.
 
 Each new auth user gets its `public.users` row from the `on_auth_user_created`
 trigger in `20261118100900_profile_sync_and_funding_status.sql`. Without that
@@ -217,6 +221,50 @@ Assertion scripts in `supabase/tests/` verify the schema acceptance criteria
 hosted Supabase SQL editor: every assertion raises `FAIL: …` on violation,
 a final select confirms success, and everything is rolled back so no data
 persists.
+
+## Deadline locking (F11)
+
+This is the "betting window" clock from the [two-clocks
+rule](REQUIREMENTS.md#the-two-clocks-non-negotiable): stakes close before any
+render exists. Predictions are accepted only while a round is `OPEN` and before
+its `prediction_deadline`; both conditions are enforced by database triggers
+(see `supabase/migrations/20261118100400_predictions.sql`). The other half of
+the deadline rule is moving the round _out_ of `OPEN` so the pipeline can
+proceed. That is `public.lock_due_rounds`, called by an internal job.
+
+How it stays correct across restarts and repeats:
+
+- **One transaction per run.** The function selects due `OPEN` rounds
+  (`prediction_deadline <= now()`) with `for update skip locked` and calls
+  `transition_round` for each. A process that dies mid-batch leaves the rounds
+  it already locked durably `LOCKED` and the rest `OPEN`; the next run picks
+  up the remainder.
+- **Idempotent.** An already-`LOCKED` round is no longer `OPEN`, so it cannot
+  be selected again. `transition_round` _also_ treats a repeat of the target
+  status as a no-op, so the audit trail never gains a duplicate event.
+- **Concurrency-safe.** Two overlapping invocations split the due set via
+  `skip locked` instead of one aborting on a concurrent row change.
+- **Resumable next stage.** `listRoundsAwaitingRun()` (in
+  `lib/server/services/competitions/lock.ts`) returns `LOCKED` rounds oldest
+  first. The F17 pipeline asks the database rather than trusting an in-memory
+  list, and re-processing is safe because `model_executions` has a unique key.
+
+Trigger it with the internal endpoint (auth is a shared secret; it fails
+closed if `INTERNAL_JOB_SECRET` is unset):
+
+```bash
+curl -X POST https://<host>/api/internal/jobs/lock-rounds \
+  -H "x-internal-job-secret: $INTERNAL_JOB_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"limit": 100}'
+```
+
+The body is optional. `now` (ISO-8601) overrides the evaluation clock for
+backfill/testing; production calls omit it so the database clock is
+authoritative. The response reports what this run actually locked and
+`hasMore: true` when the batch filled (run again rather than wait for the next
+tick). A scheduler calling it on an interval is the production shape — wiring
+that scheduler is deploy-time work (F28), not part of this job.
 
 ## Docker
 
@@ -328,7 +376,6 @@ Conventions when touching the UI:
 - The hero vortex (`components/vortex-field.tsx`) is a three.js flow
   field. It must keep its `prefers-reduced-motion` still frame, its CSS
   underlay fallback, and its pause-when-offscreen behaviour.
-
 
 ## Architecture
 
