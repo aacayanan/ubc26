@@ -174,6 +174,12 @@ and Solana modules.
 
 The shared package contains reusable TypeScript definitions.
 
+Competition lifecycle transitions use a shared state machine in
+`apps/web/lib/server/services/competitions/`. The database provides the
+same transition rules through `public.transition_round(...)`, a
+compare-and-set RPC that creates auditable lifecycle events and has
+retry-safe same-status behavior.
+
 API routes and background jobs use the server error convention in
 `apps/web/lib/server/errors/app-error.ts`. API failures use the shared
 response handler in `apps/web/lib/server/http/api-error.ts`; background

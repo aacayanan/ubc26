@@ -41,7 +41,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 - F6. User profile record sync (Supabase auth → Users table), points balance display (starts at 0).
 
 ### M2 — Competitions & Predictions
-- F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`.
+- F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`. **Done (2026-11-18)** — shared service state machine, CAS transition repository contract, audited database RPC, and finalized-result guards are implemented.
 - F8. Admin/internal path to create a competition round (challenge, participating models, prediction deadline).
 - F9. Dashboard lists open competitions: challenge preview, models, deadline countdown, potential points.
 - F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions.

@@ -13,11 +13,13 @@
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx,json,css,md}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,jsx,json,css,md}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "typecheck": "npm exec --workspace=web -- next typegen && npm exec --workspace=web -- tsc --noEmit",
+    "test": "tsx --tsconfig apps/web/tsconfig.json --conditions=react-server --test \"apps/**/*.test.ts\"",
     "db:link": "supabase link",
     "db:push": "supabase db push"
   },
   "devDependencies": {
     "prettier": "3.10.1",
-    "supabase": "^2.122.1"
+    "supabase": "^2.122.1",
+    "tsx": "^4.23.15"
   }
 }
