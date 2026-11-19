@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Status } from "@/components/ui";
 
 interface CatalogOption {
   id: string;
@@ -15,12 +16,13 @@ interface CompetitionFormProps {
 
 export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
   const router = useRouter();
-  const [slug, setSlug] = useState("");
+  const [name, setName] = useState("");
   const [challengeId, setChallengeId] = useState(challenges[0]?.id ?? "");
   const [modelIds, setModelIds] = useState<string[]>([]);
   const [deadline, setDeadline] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   function toggleModel(modelId: string) {
     setModelIds((current) =>
@@ -34,16 +36,55 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setSuccess(null);
+
+    const trimmedName = name.trim();
+    if (trimmedName.length < 3 || trimmedName.length > 120) {
+      setError("Game name must be between 3 and 120 characters.");
+      setSubmitting(false);
+      return;
+    }
+    if (!challengeId) {
+      setError("Select a valid published challenge.");
+      setSubmitting(false);
+      return;
+    }
+    if (modelIds.length < 2) {
+      setError("Choose at least two participating AI models.");
+      setSubmitting(false);
+      return;
+    }
+    if (modelIds.length > 3) {
+      setError("Choose no more than three participating AI models.");
+      setSubmitting(false);
+      return;
+    }
+    if (new Set(modelIds).size !== modelIds.length) {
+      setError("Each participating AI model must be selected only once.");
+      setSubmitting(false);
+      return;
+    }
+    if (!deadline) {
+      setError("Select a betting deadline.");
+      setSubmitting(false);
+      return;
+    }
+    const deadlineDate = new Date(deadline);
+    if (Number.isNaN(deadlineDate.getTime()) || deadlineDate <= new Date()) {
+      setError("The betting deadline must be a valid future date and time.");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const response = await fetch("/api/admin/competitions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          slug,
+          name: trimmedName,
           challengeId,
           modelIds,
-          predictionDeadline: new Date(deadline).toISOString(),
+          predictionDeadline: deadlineDate.toISOString(),
         }),
       });
       const body = await response.json();
@@ -52,7 +93,12 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
         throw new Error(body.error?.message ?? "Could not create competition");
       }
 
-      router.push("/competitions");
+      setSuccess(
+        `${trimmedName} was created and opened. Predictions close at ${deadlineDate.toLocaleString()}.`,
+      );
+      setName("");
+      setModelIds([]);
+      setDeadline("");
       router.refresh();
     } catch (submissionError: unknown) {
       setError(
@@ -66,38 +112,43 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-    >
+    <form onSubmit={handleSubmit} className="panel space-y-6 p-5 sm:p-6">
       {error && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        <div
+          role="alert"
+          className="rounded-[10px] border border-[rgb(255_46_147/0.30)] bg-[rgb(255_46_147/0.07)] px-4 py-3 text-sm text-magenta"
+        >
           {error}
         </div>
       )}
 
-      <label className="block text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Competition name
-        </span>
+      {success && (
+        <div role="status" className="panel-quiet px-4 py-3">
+          <Status tone="live" pulse>
+            Game created
+          </Status>
+          <p className="t-body mt-2 text-sm text-muted">{success}</p>
+        </div>
+      )}
+
+      <label className="block">
+        <span className="t-label text-[0.625rem] text-faint">Game name</span>
         <input
           required
-          value={slug}
-          onChange={(event) => setSlug(event.target.value)}
-          placeholder="python-list-comprehensions"
-          className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="GPT vs Claude vs Gemini — Python Challenge"
+          className="mt-2 w-full rounded-[10px] border border-[rgb(255_255_255/0.30)] bg-white/[0.02] px-3.5 py-2.5 text-sm text-ink placeholder:text-faint"
         />
       </label>
 
-      <label className="block text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Challenge
-        </span>
+      <label className="block">
+        <span className="t-label text-[0.625rem] text-faint">Challenge</span>
         <select
           required
           value={challengeId}
           onChange={(event) => setChallengeId(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          className="mt-2 w-full rounded-[10px] border border-[rgb(255_255_255/0.30)] bg-void-raised px-3.5 py-2.5 text-sm text-ink"
         >
           <option value="" disabled>
             Select a published challenge
@@ -111,48 +162,53 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
       </label>
 
       <fieldset>
-        <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Participating models
+        <legend className="t-label text-[0.625rem] text-faint">
+          Participating AI models
         </legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {models.map((model) => (
             <label
               key={model.id}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700"
+              className="flex cursor-pointer items-center gap-3 rounded-[12px] border border-hairline bg-white/[0.018] px-3.5 py-3 text-sm text-ink"
             >
               <input
                 type="checkbox"
                 checked={modelIds.includes(model.id)}
                 onChange={() => toggleModel(model.id)}
+                className="size-4 accent-[var(--violet)]"
               />
               {model.name}
             </label>
           ))}
         </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          Choose at least two models.
+        <p className="t-mono mt-2 text-[0.625rem] text-faint">
+          Choose 2–3 eligible active models. Selections must be unique.
         </p>
       </fieldset>
 
-      <label className="block text-sm">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-          Prediction deadline
+      <label className="block">
+        <span className="t-label text-[0.625rem] text-faint">
+          Betting deadline / challenge start
         </span>
         <input
           required
           type="datetime-local"
           value={deadline}
           onChange={(event) => setDeadline(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          className="mt-2 w-full rounded-[10px] border border-[rgb(255_255_255/0.30)] bg-white/[0.02] px-3.5 py-2.5 text-sm text-ink"
         />
+        <p className="t-mono mt-2 text-[0.625rem] text-faint">
+          Predictions close at this selected time. The challenge starts in
+          {` ${Intl.DateTimeFormat().resolvedOptions().timeZone}`}.
+        </p>
       </label>
 
       <button
         type="submit"
         disabled={submitting || challenges.length === 0 || models.length < 2}
-        className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+        className="btn btn-solid btn-block w-full"
       >
-        {submitting ? "Creating…" : "Create and open competition"}
+        {submitting ? "Creating game…" : "Create Game"}
       </button>
     </form>
   );

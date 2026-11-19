@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 interface CreateCompetitionBody {
   slug?: unknown;
+  name?: unknown;
   challengeId?: unknown;
   modelIds?: unknown;
   predictionDeadline?: unknown;
@@ -29,13 +30,21 @@ export async function POST(request: Request) {
       throw new ValidationError("Request body must be valid JSON");
     }
 
+    const name =
+      typeof body.name === "string"
+        ? body.name
+        : typeof body.slug === "string"
+          ? body.slug
+          : null;
+
     if (
-      typeof body.slug !== "string" ||
-      body.slug.trim().length < 3 ||
-      body.slug.trim().length > 120 ||
+      name === null ||
+      name.trim().length < 3 ||
+      name.trim().length > 120 ||
       !isUuid(body.challengeId) ||
       !Array.isArray(body.modelIds) ||
       body.modelIds.length < 2 ||
+      body.modelIds.length > 3 ||
       !body.modelIds.every(isUuid) ||
       typeof body.predictionDeadline !== "string"
     ) {
@@ -48,10 +57,16 @@ export async function POST(request: Request) {
     if (Number.isNaN(deadline.getTime())) {
       throw new ValidationError("Prediction deadline must be a valid date");
     }
+    if (deadline <= new Date()) {
+      throw new ValidationError("Prediction deadline must be in the future");
+    }
+    if (new Set(body.modelIds).size !== body.modelIds.length) {
+      throw new ValidationError("Participating models must be unique");
+    }
 
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase.rpc("create_competition", {
-      p_slug: body.slug.trim(),
+      p_slug: name.trim(),
       p_challenge_id: body.challengeId,
       p_model_ids: body.modelIds,
       p_prediction_opens_at: new Date().toISOString(),
