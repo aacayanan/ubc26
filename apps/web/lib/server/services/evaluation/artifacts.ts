@@ -63,6 +63,8 @@ export interface StoredArtifact {
   frameCount: number;
   frames: StoredFrame[];
   framesTruncated: boolean;
+  /** True when the render never ran: the row records an outage, not a verdict. */
+  unavailable: boolean;
 }
 
 /**
@@ -164,7 +166,7 @@ export async function getRenderedArtifact(
   const { data, error } = await supabase
     .from("rendered_artifacts")
     .select(
-      "execution_id, gate_passed, gate_failure_reason, checks, frame_count, frames, frames_truncated",
+      "execution_id, gate_passed, gate_failure_reason, checks, frame_count, frames, frames_truncated, unavailable",
     )
     .eq("execution_id", executionId)
     .maybeSingle();
@@ -183,6 +185,7 @@ export async function getRenderedArtifact(
     frame_count: number;
     frames: unknown;
     frames_truncated: boolean;
+    unavailable: boolean;
   };
 
   return {
@@ -193,5 +196,6 @@ export async function getRenderedArtifact(
     frameCount: row.frame_count,
     frames: Array.isArray(row.frames) ? (row.frames as StoredFrame[]) : [],
     framesTruncated: row.frames_truncated,
+    unavailable: row.unavailable,
   };
 }

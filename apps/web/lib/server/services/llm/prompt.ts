@@ -134,6 +134,74 @@ export function buildGenerationMessages(
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Chunked generation (F17).
+//
+// The audience watches the renderer take shape, so generation is split. The
+// first chunk is the same request as an unchunked turn; each later chunk carries
+// the code so far and asks only for the next piece.
+//
+// The policy — token cap, chunk count, template version — is identical for every
+// model in a round (REQUIREMENTS.md non-negotiable #10). It lives in
+// `evaluation/chunk-policy.ts` rather than here so it can be recorded on the
+// execution as data.
+// ---------------------------------------------------------------------------
+
+/**
+ * The instruction appended for a continuation chunk.
+ *
+ * Deliberately explicit that the reply is *concatenated* verbatim: a model that
+ * re-emits the whole function or adds `\`\`\`` fences would break the join, and
+ * the failure would look like a syntax error rather than a protocol mistake.
+ */
+export const CONTINUATION_INSTRUCTION = [
+  "You are continuing the same function from the previous reply.",
+  "Reply with ONLY the next piece of code, starting exactly where the previous piece stopped.",
+  "Do not repeat any code you already wrote. Do not add prose, comments about this instruction, or code fences.",
+].join("\n");
+
+/** The final chunk's instruction: later chunks are never requested. */
+export const FINAL_CHUNK_INSTRUCTION = [
+  "You are continuing the same function from the previous reply.",
+  "Reply with ONLY the remaining code, starting exactly where the previous piece stopped, and finish the function.",
+  "Do not repeat any code you already wrote. Do not add prose or code fences.",
+].join("\n");
+
+export interface ChunkGenerationInput {
+  challenge: GenerationChallenge;
+  /** Code accumulated from the chunks before this one. Empty for chunk 0. */
+  codeSoFar: string;
+  chunkIndex: number;
+  isFinalChunk: boolean;
+}
+
+/**
+ * Build the messages for one chunk.
+ *
+ * Chunk 0 is byte-identical to `buildGenerationMessages`, so chunking changes
+ * how a model is asked, never what it is asked. Later chunks keep the same
+ * system prompt and brief (so the constraints are still in front of the model)
+ * and append the code so far.
+ */
+export function buildChunkMessages(input: ChunkGenerationInput): ChatMessage[] {
+  const { challenge, codeSoFar, chunkIndex, isFinalChunk } = input;
+
+  const base = buildGenerationMessages(challenge);
+  if (chunkIndex === 0) return base;
+
+  const instruction = isFinalChunk
+    ? FINAL_CHUNK_INSTRUCTION
+    : CONTINUATION_INSTRUCTION;
+
+  return [
+    ...base,
+    // Prior output is carried as the assistant's own turn: the model is
+    // continuing its work, not being handed a stranger's code to patch.
+    { role: "assistant", content: codeSoFar },
+    { role: "user", content: instruction },
+  ];
+}
+
 /**
  * Stable fingerprint of the exact messages sent, stored as `prompt_sha256` in
  * the execution's config snapshot. Named without "prompt" when logged because

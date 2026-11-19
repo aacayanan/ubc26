@@ -181,12 +181,44 @@ categories).
   stream generation in capped chunks → render each finished chunk → run
   deterministic checks → invoke the judge model → store frames, judge
   verdicts and executions. Must degrade when a partial chunk does not parse
-  (show growth, do not fail the round).
+  (show growth, do not fail the round). **Done (2026-11-19)** —
+  `services/pipeline/run-round.ts` drives a LOCKED round through every
+  participating model: chunked generation (`llm/generate-chunks.ts`, policy in
+  `evaluation/chunk-policy.ts` — identical token cap and chunk count recorded on
+  every execution), a progressive preview per chunk
+  (`evaluation/preview-run.ts`, written to `render_previews` so a partial render
+  is never an artifact), the F14 gate on the finished source, then the F31 judge
+  on stored frames. A chunk that does not parse is a "compiling…" preview, never
+  a round failure. **All models generate concurrently** — the audience watches
+  them race — while a counting semaphore caps sandbox work at one Chromium
+  container at a time (three concurrent containers is how a small deploy host
+  times out); renders and judge calls then run in lineup order. The pipeline
+  advances the round `LOCKED → RUNNING` on start and `RUNNING → EVALUATING` only
+  once every judgeable model has a ruling, so a round left `RUNNING` is the
+  honest signal that it still needs a pass — and `listRoundsForPipeline` re-picks
+  it. Migration `20261119000700` adds `generation_chunks`,
+  `render_previews`, `judge_verdicts`, `llm_models.role`, the `judge` run type
+  and `model_executions.subject_model_id`. Resume is keyed at every stage — an
+  existing chunk is not re-generated, a stored artifact is re-read, a ruling is
+  not re-asked — and `POST /api/internal/jobs/run-rounds` is the trigger. Live
+  progress is `GET /api/rounds/[id]/progress`, gated by the two-clocks rule in
+  the service (nothing renderable before the round locks). Unit tests in
+  `source-assembly.test.ts`, `generate-chunks.test.ts`, `judge-prompt.test.ts`,
+  `chunk-policy.test.ts`, `run-round*.test.ts`; SQL assertions in
+  `supabase/tests/f17_pipeline.sql`.
 - F31. **Judge model integration** _(new, 2026-11-19)_: a vision-capable
   OpenRouter model configured as a `llm_models` row with `role = 'judge'`;
   given the brief and sampled frames, returns a structured conformance
   verdict (pass/fail and reason per criterion). Same client and retry/forfeit
-  rules, separate `run_type = 'judge'` rows.
+  rules, separate `run_type = 'judge'` rows. **Minimal integration done
+  (2026-11-19, under F17)** — `services/llm/judge.ts` + `llm/judge-prompt.ts`:
+  the judge is resolved by role (never a hard-coded ID), samples frames evenly
+  across the loop, and stores a per-criterion ruling in `judge_verdicts`.
+  `conformed` is derived from the criteria; a reply that is not the expected
+  object is a typed `unavailable`, never a silent pass or fail. The seed
+  activates the judge row and `getActiveLineup()` filters it out of the lineup.
+  Left for the issue: rubric-weight presentation and an operator re-judge
+  endpoint.
 - F18. **Parimutuel scoring & settlement** _(re-scoped 2026-11-19)_: compute
   the pool, resolve the conformance outcome, split the pool proportionally
   among backers of the winning model, and award fan-favorite points.

@@ -13,17 +13,31 @@
 -- token budget thinking and return `content: null`, or (flint) run 30–76 s and
 -- often return nothing at all. A competitor that cannot emit a render forfeits,
 -- and a round where every model forfeits is voided (F15), so a free slot makes
--- the demo less reliable rather than cheaper. At these prices a round costs
--- well under a cent: 3 × (~300 in + ~350 out) ≈ $0.00005–$0.00007.
+-- the demo less reliable rather than cheaper.
+--
+-- WHY THESE THREE, AND NOT SMALLER CHEAPER MODELS: `mistral-nemo`,
+-- `command-r7b` and `llama-3.1-8b` are an order of magnitude cheaper and do
+-- render — every one of them passes the deterministic gate. Judged against the
+-- brief, though, none produced a recognisable donut: they draw *something*
+-- that moves, not the thing that was asked for. A round where every model is
+-- not-conformed is not a showdown. These three were verified against the same
+-- brief and the same chunk cap, and two of the three conform.
+--
+-- A round costs roughly a cent: three generations of a few thousand tokens plus
+-- three vision judgements, all on models priced well under $1/M tokens.
+--
+-- The judge is deliberately NOT one of the competitors. Judging your own render
+-- is a conflict of interest, and it also makes a swap a single row edit rather
+-- than a scramble to re-seat both roles.
 --
 -- Re-running is safe: `on conflict (slug)` updates the row, and the slug is the
 -- app-level identity — moving a competitor to a different OpenRouter model
 -- updates that row rather than colliding on the slug's unique constraint.
 --
--- WHAT THIS FILE DOES NOT DO: it does not activate the judge. `llm_models` has
--- no `role` column yet (F31 adds it) and `getActiveLineup()` returns every
--- active row, so an active judge would silently compete as a fourth model. The
--- judge row is seeded `is_active = false` for exactly that reason.
+-- WHAT THIS FILE DOES NOT DO: it does not seat a judge as a competitor. The
+-- judge row carries `role = 'judge'` (F31, migration 20261119000700), and
+-- `getActiveLineup()` selects `role = 'competitor'` only — so activating the
+-- judge below is safe and the judge can never be drawn into the lineup.
 
 -- ---------------------------------------------------------------------------
 -- 1. The competitors.
@@ -37,28 +51,28 @@ insert into public.llm_models
   (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
 values
   (
-    'nemo',
-    'Mistral Nemo',
+    'gemini',
+    'Gemini 2.5 Flash',
     'openrouter',
-    'mistralai/mistral-nemo',
+    'google/gemini-2.5-flash',
     '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     1
   ),
   (
-    'command',
-    'Cohere Command R7B',
+    'gpt-mini',
+    'GPT-4o mini',
     'openrouter',
-    'cohere/command-r7b-12-2024',
+    'openai/gpt-4o-mini',
     '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     2
   ),
   (
-    'llama',
-    'Llama 3.1 8B Instruct',
+    'deepseek',
+    'DeepSeek Chat v3.1',
     'openrouter',
-    'meta-llama/llama-3.1-8b-instruct',
+    'deepseek/deepseek-chat-v3.1',
     '{"temperature": 0, "max_tokens": 4096}'::jsonb,
     true,
     3
@@ -72,43 +86,50 @@ on conflict (slug) do update set
   sort_order = excluded.sort_order;
 
 -- ---------------------------------------------------------------------------
--- Retire the free lineup this file previously seated.
+-- Retire every lineup this file previously seated.
 --
--- The three :free rows (`flash`, `north`, `flint`) were measured and do not
--- render — see the header. Deactivated rather than deleted so the executions
--- already recorded against them keep their foreign key and remain auditable.
+-- `flash`, `north`, `flint` were free-tier reasoning models that spend the whole
+-- chunk budget thinking and return `content: null` — they cannot render at all.
+-- `nemo`, `command`, `llama` do render, but at 8B they draw something that only
+-- passes the deterministic gate: judged against the brief, none produced a
+-- recognisable donut. Deactivated rather than deleted so the executions already
+-- recorded against them keep their foreign key and remain auditable.
 -- ---------------------------------------------------------------------------
 update public.llm_models
   set is_active = false
-  where slug in ('flash', 'north', 'flint');
+  where slug in ('flash', 'north', 'flint', 'nemo', 'command', 'llama');
 
 -- ---------------------------------------------------------------------------
--- 2. The judge — seeded inactive until F31 can tell it apart from a competitor.
+-- 2. The judge.
 --
--- A vision-capable model that reads frames and rules on the rubric. Inactive
--- because `getActiveLineup()` has no role filter: an active row here would be
--- handed the brief as a competitor. F31 adds `role` and activates this row.
+-- A vision-capable model that reads frames and rules on the rubric. Active, but
+-- with `role = 'judge'`, so it is never handed the brief as a competitor:
+-- `getActiveLineup()` filters on role, and `create_competition` refuses a
+-- non-competitor. This is the whole switch — the pipeline resolves the judge by
+-- role, so swapping models is a row edit, never a code change.
 -- ---------------------------------------------------------------------------
 insert into public.llm_models
-  (slug, name, provider, openrouter_model_id, config, is_active, sort_order)
+  (slug, name, provider, openrouter_model_id, config, is_active, sort_order, role)
 values
   (
     'judge',
-    'Nemotron 3.5 Super VL',
+    'Claude Haiku 4.5',
     'openrouter',
-    'nvidia/nemotron-3.5-super-vl:free',
+    'anthropic/claude-haiku-4.5',
     '{"temperature": 0, "max_tokens": 4096}'::jsonb,
-    false,
-    100
+    true,
+    100,
+    'judge'
   )
 on conflict (slug) do update set
   name = excluded.name,
   provider = excluded.provider,
   openrouter_model_id = excluded.openrouter_model_id,
   config = excluded.config,
-  -- Deliberately NOT re-activating: F31 owns that switch. Re-running this seed
-  -- must never promote the judge into the competitor lineup.
-  sort_order = excluded.sort_order;
+  -- F31 owns activation; re-running this seed seats the judge.
+  is_active = excluded.is_active,
+  sort_order = excluded.sort_order,
+  role = excluded.role;
 
 comment on table public.llm_models is
-  'F16 lineup: every is_active row competes, ordered by sort_order. The judge row is inactive until F31 adds role.';
+  'F16 lineup: every is_active row with role = ''competitor'' competes, ordered by sort_order. The role = ''judge'' row rules on renders (F31) and never competes.';
