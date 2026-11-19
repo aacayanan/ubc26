@@ -83,6 +83,28 @@ judges every run.
 - **Prediction**: parimutuel points pool on the conformance outcome; stake before the deadline, pot splits among backers of the winner. Non-redeemable points only.
 - **Rewards**: points / leaderboard only. No tokens, no NFTs, no real money.
 
+## Interface system
+
+The web app has a committed design system; do not restyle pages ad hoc.
+
+- Visual authority: `apps/web/DESIGN.md` (built system) plus
+  `apps/web/.impeccable/design.json` (tokens). Product truth:
+  `apps/web/PRODUCT.md`.
+- Tokens live in `apps/web/app/globals.css` as Tailwind v4 `@theme`
+  variables plus a `:root` block. Use them (`bg-void`, `text-ink`,
+  `text-muted`, `text-faint`, `border-hairline`, `text-magenta`,
+  `text-violet`); never raw `zinc-*`/`blue-*` classes.
+- Shared primitives live in `apps/web/components/ui.tsx`; icons are
+  authored SVGs in `components/icons.tsx`, never font glyphs.
+- The world is dark-only. Status is a 6px dot plus a word, never a filled
+  colour chip, and selection must be legible without colour.
+- The hero is a three.js flow field (`components/vortex-field.tsx`). Keep
+  its `prefers-reduced-motion` still frame, its CSS underlay fallback,
+  and its off-screen pause.
+- Demo data on the landing page is labelled synthetic. Never add
+  fabricated users, win rates, testimonials or benchmarks.
+
+
 ## Architecture boundaries
 
 Keep frontend, business logic, and external integrations decoupled. Backend services: auth/user management, competition management, challenge management, prediction management, LLM orchestration, code evaluation/sandboxing, scoring/settlement, blockchain integration.
