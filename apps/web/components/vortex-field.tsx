@@ -46,10 +46,13 @@ const fieldGLSL = /* glsl */ `
 
     float ang = strand / ${LINE_STRANDS.toFixed(1)} * TAU
               + h * twist
-              + t * (0.02 + sj * 0.02);
+              + t * (0.011 + sj * 0.011);
 
-    float r = (pow(h, 3.1) * 10.5 + 0.05) * radiusScale;
-    r += sin(h * 3.6 + sk * 6.283 + t * 0.3) * 0.34 * h;
+    float r = (pow(h, 2.55) * 9.6 + 0.46) * radiusScale;
+    // the bore flares out where it meets the plane, so the tunnel opens
+    // into the horizon instead of ending on a flat disc
+    r += 1.15 * pow(max(0.0, 1.0 - h * 3.2), 3.0);
+    r += sin(h * 3.6 + sk * 6.283 + t * 0.18) * 0.34 * h;
 
     vec3 p = vec3(cos(ang) * r, h * 7.0, sin(ang) * r);
     depth = mix(0.35, 1.0, smoothstep(-7.0, 4.5, p.z));
@@ -59,7 +62,7 @@ const fieldGLSL = /* glsl */ `
   vec3 ringPoint(float ringUnit, float angSeed, float t, out float ring) {
     ring = floor(ringUnit * 30.0) / 30.0;
     float r = 0.55 + pow(ring, 0.7) * 6.8;
-    float ang = angSeed * TAU + t * (0.02 + 0.1 / (r + 1.0));
+    float ang = angSeed * TAU + t * (0.011 + 0.055 / (r + 1.0));
     return vec3(cos(ang) * r, 0.0, sin(ang) * r);
   }
 
@@ -108,14 +111,14 @@ const dustVertex = /* glsl */ `
       /* Inbound commitments: dots stream in from the wide mouth and fall
          toward the throat, brightening as they are sealed. */
       float sj = fract(aSeed.x * ${LINE_STRANDS.toFixed(1)});
-      float h = 1.0 - fract(aSeed.y + t * (0.022 + sj * 0.03));
+      float h = 1.0 - fract(aSeed.y + t * (0.0095 + sj * 0.013));
 
       float depth;
       float sk;
       p = funnelPoint(aSeed.x, h, t, depth, sk);
 
       vColor = mix(funnelColour(h), modelTint(aSeed.x), 0.55);
-      vAlpha = smoothstep(0.0, 0.1, h)
+      vAlpha = smoothstep(0.0, 0.03, h)
              * (1.0 - smoothstep(0.32, 1.0, h))
              * 0.95
              * depth;
@@ -131,7 +134,7 @@ const dustVertex = /* glsl */ `
       vAlpha = (1.0 - smoothstep(0.0, 1.0, ring)) * 0.34;
     } else {
       /* outward confirmation pulses */
-      float phase = fract(t * 0.085 + aSeed.z);
+      float phase = fract(t * 0.045 + aSeed.z);
       p = pulsePoint(aSeed.y, phase);
 
       vColor = mix(vec3(1.0, 0.9, 0.97), vec3(1.0, 0.18, 0.58),

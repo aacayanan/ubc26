@@ -61,7 +61,7 @@ export default function Home() {
           className="pointer-events-none absolute inset-0 z-[1]"
           style={{
             background:
-              "radial-gradient(58% 46% at 50% 46%, rgba(5,4,10,0.74) 0%, rgba(5,4,10,0.4) 48%, transparent 76%)",
+              "radial-gradient(62% 54% at 50% 50%, rgba(5,4,10,0.78) 0%, rgba(5,4,10,0.44) 50%, transparent 78%)",
           }}
         />
         {/* horizon glow, sitting where the funnel meets the ringed plane */}
@@ -91,7 +91,10 @@ export default function Home() {
               Enter a round
               <ChevronsRight className="size-3.5 opacity-60" />
             </Link>
-            <Link href="#how" className="btn btn-ghost">
+            <Link
+              href="#how"
+              className="btn btn-ghost bg-[rgb(5_4_10/0.55)] backdrop-blur-sm"
+            >
               How it works
             </Link>
           </div>
