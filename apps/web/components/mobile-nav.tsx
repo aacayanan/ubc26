@@ -2,16 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import NavLink from "@/components/nav-link";
-import { appDrawerNav, marketingNav } from "@/components/nav-items";
+import type { NavItem } from "@/components/nav-items";
 
 interface MobileNavProps {
-  variant: "marketing" | "app";
+  links: NavItem[];
 }
 
-export default function MobileNav({ variant }: MobileNavProps) {
+export default function MobileNav({ links }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const links = variant === "app" ? appDrawerNav : marketingNav;
 
   useEffect(() => {
     if (!open) return;

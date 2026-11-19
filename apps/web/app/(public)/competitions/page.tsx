@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   EmptyState,
   Meter,
@@ -23,8 +24,59 @@ interface Round {
 }
 
 export default function CompetitionsPage() {
-  // TODO: load from API — GET /api/rounds
-  const rounds: Round[] = [];
+  const [rounds, setRounds] = useState<Round[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/competitions", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error?.message ?? "Could not load rounds");
+        }
+        return body.competitions as Array<{
+          id: string;
+          title: string;
+          challenge_preview: string;
+          models: string[];
+          deadline: string;
+          status: string;
+          potential_points: number;
+        }>;
+      })
+      .then((competitions) => {
+        if (!active) return;
+        setRounds(
+          competitions.map((competition) => ({
+            id: competition.id,
+            brief_title: competition.title,
+            brief_preview: competition.challenge_preview,
+            models: competition.models,
+            deadline: competition.deadline,
+            state: competition.status,
+            pool_points: competition.potential_points,
+            pool_capacity: competition.potential_points,
+          })),
+        );
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load rounds",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="shell py-14 sm:py-16">
@@ -34,7 +86,20 @@ export default function CompetitionsPage() {
       />
 
       <div className="mt-10">
-        {rounds.length === 0 ? (
+        {loading ? (
+          <Panel quiet className="px-5 py-8 text-center" aria-busy="true">
+            <p className="t-mono text-[0.625rem] text-faint">
+              Loading open rounds…
+            </p>
+          </Panel>
+        ) : error ? (
+          <div role="alert">
+            <Panel quiet className="px-5 py-8 text-center">
+              <p className="text-[0.9375rem] text-ink">Rounds unavailable.</p>
+              <p className="t-body mt-2 text-sm text-muted">{error}</p>
+            </Panel>
+          </div>
+        ) : rounds.length === 0 ? (
           <EmptyState
             title="No round is open right now."
             action={

@@ -15,15 +15,19 @@ export const marketingNav: NavItem[] = [
   { href: "/results", label: "Results" },
 ];
 
-/** Signed-in nav. Same destinations, plus the dashboard. */
-export const appNav: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
-  ...marketingNav,
-];
+export function getSignedInNav(isAdmin: boolean): NavItem[] {
+  return [
+    ...marketingNav,
+    ...(isAdmin ? [{ href: "/admin", label: "Admin Dashboard" }] : []),
+    { href: "/dashboard", label: "Dashboard" },
+  ];
+}
 
-/** The drawer can afford the account-route links the desktop bar cannot. */
-export const appDrawerNav: NavItem[] = [
-  ...appNav,
-  { href: "/predictions", label: "My predictions" },
-  { href: "/profile", label: "Profile" },
-];
+/** The drawer can afford account-route links the desktop bar cannot. */
+export function getSignedInDrawerNav(isAdmin: boolean): NavItem[] {
+  return [
+    ...getSignedInNav(isAdmin),
+    { href: "/predictions", label: "My predictions" },
+    { href: "/profile", label: "Profile" },
+  ];
+}
