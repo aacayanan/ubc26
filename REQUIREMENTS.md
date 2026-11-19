@@ -127,6 +127,18 @@ categories).
   snippet. Each brief is versioned and must be validated (runs a reference
   implementation) before `published`. **Re-scoped** from the Python
   test-case bank. _Former scope: prompt + hidden expected-output tests._
+  **Done (2026-11-19)** — migration `20261118101500` extends `challenges` into
+  a brief (`style_constraints`, `target_duration_ms`, `frame_count`/
+  `frame_width`/`frame_height`, `deterministic_checks`, `judge_rubric`,
+  `reference_impl`, `content_hash`) and adds `seed_brief()`/`publish_brief()`
+  plus a publish trigger that refuses an incomplete brief or one whose
+  reference has not rendered. Three briefs (isometric donut, pulsing reactor
+  core, light tunnel) seed as drafts from `supabase/seeds/`;
+  `npm run briefs:validate` renders each reference in the Chromium sandbox and
+  publishes only on a clean pass. Renderer: `sandbox/render/` (digest-pinned
+  Playwright image), `integrations/docker/render-sandbox.ts`,
+  `evaluation/gate.ts`. SQL assertions in `supabase/tests/briefs.sql`;
+  determinism verified (identical frame hashes across runs).
 - F13. **Sandbox runner**: fresh Docker container per run — no network, CPU/
   memory limits, wall-clock timeout, read-only FS where possible. Now emits
   **artifact frames** (image files) instead of test values, via headless

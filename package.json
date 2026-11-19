@@ -16,8 +16,11 @@
     "test": "npm run test --workspace=web",
     "sandbox:build": "docker build -t ai-showdown-sandbox:py3.12 sandbox/",
     "sandbox:check": "node --test scripts/sandbox-persistence-check.mjs",
+    "sandbox:render:build": "docker build -t ai-showdown-render:chromium sandbox/render/",
+    "briefs:validate": "node scripts/briefs-validate.mjs",
     "db:link": "supabase link",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "db:seed:briefs": "supabase db push --include-seed"
   },
   "devDependencies": {
     "prettier": "3.10.1",
