@@ -147,8 +147,8 @@ export default function LinkWalletStep({
             Link your Solana wallet
           </h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Linking lets you create rounds and verify your predictions on-chain.
-            You can skip this and explore first.
+            Linking lets you join live rounds and verify your predictions
+            on-chain. You can skip this and explore in practice mode first.
           </p>
         </div>
 
@@ -208,8 +208,8 @@ export default function LinkWalletStep({
               </button>
             )}
             <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
-              Practice accounts can predict on rounds others create, but not
-              create rounds themselves.
+              Practice accounts can browse rounds and watch results, but only a
+              funded Solana account can join a live round.
             </p>
           </div>
         )}

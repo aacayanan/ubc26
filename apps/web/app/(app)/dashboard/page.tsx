@@ -238,8 +238,8 @@ function DashboardContent() {
         {!stats.funded && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
             <span className="font-medium">No Solana account linked.</span> You
-            can join and predict on rounds others create, but only funded
-            accounts (those with a linked Solana wallet) can create rounds.{" "}
+            can browse rounds and watch results, but joining a round needs a
+            funded account (a linked Solana wallet).{" "}
             <Link
               href="/link-wallet"
               className="font-medium underline underline-offset-4"
@@ -252,8 +252,8 @@ function DashboardContent() {
         {stats.funded && stats.practiceMode && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
             <span className="font-medium">Practice mode.</span> Your Solana
-            account is linked, but you&apos;re playing with paper predictions —
-            nothing is tracked beyond points.{" "}
+            account is linked, but you&apos;re in paper mode — no prompt session
+            starts when you join a round.{" "}
             <Link
               href="/link-wallet"
               className="font-medium underline underline-offset-4"

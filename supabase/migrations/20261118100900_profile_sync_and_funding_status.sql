@@ -79,7 +79,7 @@ grant update (display_name, avatar_url, practice_mode) on public.users
 
 comment on column public.users.funded is
   'Derived: has a linked or sign-in Solana wallet. Maintained by trigger on public.wallets.';comment on column public.users.practice_mode is
-  'Wallet-linked account opted into paper trading; cannot create rounds.';
+  'Wallet-linked account opted into paper trading: joining a round starts no prompt session. Rounds are admin-created; users only join.';
 
 -- Wallets: a user has at most one row (unique user_id), so linking twice must
 -- update rather than insert. The grants below already cover the needed columns.

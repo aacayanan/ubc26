@@ -44,7 +44,7 @@ Last updated: 2026-11-18. Source: project spec + decisions confirmed with the te
 - F7. Competition lifecycle state machine: `CREATED → OPEN → LOCKED → RUNNING → EVALUATING → SETTLED → ARCHIVED` + failure/cancel/retry states, validated one-way transitions, no edits after `SETTLED`.
 - F8. Admin/internal path to create a competition round (challenge, participating models, prediction deadline).
 - F9. Dashboard lists open competitions: challenge preview, models, deadline countdown, potential points.
-- F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions.
+- F10. Prediction submission UI: pick a winner per category (accuracy, speed, code length); server-side validation rejects late/duplicate submissions. Joining a round starts a prompt session, and only funded accounts (linked Solana wallet, not in practice_mode) may join live; practice accounts browse and observe.
 - F11. Prediction locking at deadline (transition to `LOCKED`), idempotent, survives restarts.
 
 ### M3 — Challenge Bank & Sandbox
