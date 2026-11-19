@@ -23,7 +23,24 @@ repository root — see
 ## Structure
 
 - `app/` - Next.js App Router pages and routes
+- `app/globals.css` - Design tokens (Tailwind v4 `@theme`) and component
+  classes
+- `components/` - Design-system primitives (`ui.tsx`), icons, logo, site
+  header, and the WebGL hero field
+- `public/texture/` - Generated atmosphere assets (grain tile)
 - `lib/config/` - Typed environment accessors (client and server)
 - `lib/server/services/` - Backend business logic
 - `lib/server/integrations/` - External integrations (Supabase,
   OpenRouter, Solana)
+
+## Design system
+
+This workspace has one visual world, documented in
+[DESIGN.md](DESIGN.md) with machine-readable tokens in
+[.impeccable/design.json](.impeccable/design.json). Product truth lives
+in [PRODUCT.md](PRODUCT.md); the interface must not contradict it.
+
+Tokens are declared in `app/globals.css` and consumed as Tailwind
+classes — do not introduce raw palette classes. `components/ui.tsx`
+holds the shared primitives, and `components/icons.tsx` the authored
+icon set.
