@@ -275,6 +275,49 @@ export function CrosshairMark({ className }: { className?: string }) {
 }
 
 /* ------------------------------------------------------------------ *
+ * RoundHash — a round's public identifier, set as an instrument reading.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The round's id, shortened for display.
+ *
+ * A round has no human name that stays unique — its title repeats, its slug is
+ * an operator handle. The UUID is the one string that names this round and no
+ * other, so surfaces show it wherever a round instance needs a stable handle.
+ * Shortened to its first two UUID groups: enough to recognise and quote, short
+ * enough to sit in a row beside a status. The full id stays in the title and on
+ * the detail page's own record.
+ *
+ * Set in tabular mono, never in prose: it is a reading, not a word.
+ */
+export function RoundHash({
+  id,
+  className,
+  full = false,
+}: {
+  id: string;
+  className?: string;
+  /** Show the whole id instead of the short form. */
+  full?: boolean;
+}) {
+  return (
+    <span
+      className={cx("t-num text-[0.625rem] text-faint", className)}
+      title={id}
+    >
+      {full ? id : shortRoundId(id)}
+    </span>
+  );
+}
+
+/** `3f9a1c2e-7b40` — first two UUID groups, or the id as given if it is not one. */
+export function shortRoundId(id: string): string {
+  const groups = id.split("-");
+  if (groups.length < 2) return id.slice(0, 13);
+  return `${groups[0]}-${groups[1]}`;
+}
+
+/* ------------------------------------------------------------------ *
  * Readout — a labelled number, the instrument-panel atom.
  * ------------------------------------------------------------------ */
 

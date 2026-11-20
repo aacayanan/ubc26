@@ -7,6 +7,7 @@ import {
   Meter,
   PageHeader,
   Panel,
+  RoundHash,
   SectionHeading,
   Status,
   roundLabel,
@@ -143,7 +144,7 @@ export default function ModelsPage() {
     <div className="shell py-14 sm:py-16">
       <PageHeader title="Models" />
 
-      <div className="mt-10">
+      <div className="mt-8">
         {error ? (
           <div role="alert">
             <Panel quiet className="px-5 py-8 text-center">
@@ -175,8 +176,6 @@ export default function ModelsPage() {
           </EmptyState>
         ) : (
           <>
-            <ScopeLine scope={data.scope} />
-
             <ul className="mt-6 grid gap-3 lg:grid-cols-2">
               {data.models.map((model) => (
                 <li key={model.model_id}>
@@ -203,23 +202,6 @@ export default function ModelsPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function ScopeLine({ scope }: { scope: AnalyticsResponse["scope"] }) {
-  const parts = [`${scope.settled_rounds} settled`];
-  if (scope.voided_rounds > 0) parts.push(`${scope.voided_rounds} void`);
-  if (scope.unsettled_rounds > 0)
-    parts.push(`${scope.unsettled_rounds} no result`);
-
-  return (
-    <p className="t-mono text-[0.625rem] text-faint">
-      Across {parts.join(" · ")} comparable round
-      {scope.settled_rounds + scope.voided_rounds + scope.unsettled_rounds === 1
-        ? ""
-        : "s"}
-      .
-    </p>
   );
 }
 
@@ -287,9 +269,15 @@ function ModelCard({ model }: { model: ModelStat }) {
             >
               <Link
                 href={`/results/${row.round_id}`}
-                className="t-body min-w-0 truncate text-[0.8125rem] text-muted transition-colors hover:text-ink"
+                className="flex min-w-0 items-baseline gap-2.5"
               >
-                {row.brief_title}
+                <span className="t-body min-w-0 truncate text-[0.8125rem] text-muted transition-colors hover:text-ink">
+                  {row.brief_title}
+                </span>
+                <RoundHash
+                  id={row.round_id}
+                  className="shrink-0 text-[0.5625rem]"
+                />
               </Link>
               <span className="flex items-center gap-3">
                 {row.is_crowd_pick ? (
@@ -381,9 +369,9 @@ function GapRow({ gap }: { gap: HistoryGap }) {
         </span>
       </div>
       <div className="flex items-center gap-3">
-        <span className="t-mono text-[0.5625rem] text-faint">
-          {new Date(gap.decided_at).toLocaleDateString()}
-        </span>
+        {/* The round's id where a date used to sit: the one handle that names
+            this round and no other. */}
+        <RoundHash id={gap.round_id} className="text-[0.5625rem]" />
         <Link
           href={`/results/${gap.round_id}`}
           className="btn btn-ghost btn-sm"

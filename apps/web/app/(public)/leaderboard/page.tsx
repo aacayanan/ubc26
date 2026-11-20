@@ -63,10 +63,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="shell py-14 sm:py-16">
-      <PageHeader
-        title="Leaderboard"
-        description="Ranked by correct predictions. Wager Devnet SOL on the model that conforms to the brief — every winning wager counts once its round settles."
-      />
+      <PageHeader title="Leaderboard" />
 
       <div className="mt-10">
         {error ? (

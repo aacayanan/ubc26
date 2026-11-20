@@ -10,6 +10,7 @@ import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
   Panel,
+  RoundHash,
   Status,
   roundLabel,
   roundTone,
@@ -174,8 +175,29 @@ export default function CompetitionDetailPage() {
   const deadline = describeDeadline(round.deadline);
   const isOpen = round.state === "OPEN" && !deadline.expired;
 
+  // Two clocks, two layouts. While the ante is open the page leads with the
+  // brief; once the round locks it is the show — a compact masthead, then the
+  // live wager panel and the renders at the page's full width.
+  const isLive = !isOpen;
+
+  // What the round is doing, in one line. The live page has no room for the old
+  // explanation panel; this is the same copy, kept where it still answers the
+  // question a viewer arrives with.
+  const liveNote =
+    round.state === "EVALUATING"
+      ? "Renders are in and the judge is ruling on conformance."
+      : round.state === "SETTLED" || round.state === "ARCHIVED"
+        ? "Its conformance result and the crowd's choice are recorded in Results."
+        : round.state === "VOIDED"
+          ? "No model conformed to the brief, so every wager is refunded."
+          : round.state === "CANCELLED" || round.state === "FAILED"
+            ? "No render ran, so the round is void and every wager is refunded."
+            : round.state === "RETRYING"
+              ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
+              : "The round has locked. Renders are being produced, and the crowd vote opens once they land.";
+
   return (
-    <div className="shell py-12 sm:py-14">
+    <div className="shell pt-12 pb-12 sm:pt-14 sm:pb-14">
       <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2.5">
         <Link href="/competitions" className="link t-label text-[0.625rem]">
           Rounds
@@ -188,62 +210,96 @@ export default function CompetitionDetailPage() {
         </span>
       </nav>
 
-      <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr] lg:items-start">
-        <div className="space-y-3">
-          <Panel className="p-7">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Status
-                tone={roundTone(round.state)}
-                pulse={round.state === "OPEN"}
-              >
-                {roundLabel(round.state)}
-              </Status>
-              {isOpen ? (
-                <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
-                  <span className="text-faint">closes in</span>
-                  <CountdownReadout
-                    deadline={round.deadline}
-                    className="t-num text-ink"
-                  />
-                </span>
-              ) : (
-                <span className="t-mono text-[0.6875rem] text-faint">
-                  {new Date(round.deadline).toLocaleString()}
-                </span>
-              )}
-            </div>
+      {isLive ? (
+        // The masthead is a document heading, not a card. The show below it is
+        // the page; a glass slab above the renders made the brief look like the
+        // headline exhibit and pushed three full-size panels past the fold.
+        <header className="border-b border-hairline pb-4">
+          <h1 className="t-title max-w-[44ch] text-[clamp(1.125rem,1.8vw,1.375rem)] text-ink">
+            {round.brief_title}
+          </h1>
+          {/* The prompt stays on the page when the round is live: the audience
+              needs to know what the models were asked to draw. */}
+          <p className="t-body mt-1.5 max-w-[78ch] text-[0.8125rem] text-muted">
+            {round.brief_text}
+          </p>
 
-            <h1 className="t-title mt-5 text-[clamp(1.6rem,3.2vw,2.25rem)] text-ink">
-              {round.brief_title}
-            </h1>
-            <p className="t-body mt-4 max-w-[60ch] text-sm text-muted">
-              {round.brief_text}
-            </p>
-
-            <div className="mt-7 grid gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-3">
+          {/* Status is not repeated here — the live panel below polls it, and two
+              dots reporting different states a poll apart is a defect, not a
+              detail. The hash stays as the round's handle. */}
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="t-label text-[0.5625rem] text-faint">
+                Contenders
+              </span>
               {round.models.map((m) => (
-                <div key={m.id} className="bg-void-2/80 px-4 py-3.5">
-                  <p className="t-label text-[0.5625rem] text-faint">
-                    Contender
-                  </p>
-                  <p className="mt-1 text-[0.875rem] text-ink">{m.name}</p>
-                </div>
+                <span key={m.id} className="text-[0.8125rem] text-ink">
+                  {m.name}
+                </span>
               ))}
             </div>
-          </Panel>
-        </div>
+            <RoundHash id={round.id} className="text-[0.625rem]" />
+          </div>
+        </header>
+      ) : (
+        <Panel className="px-7 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Status
+              tone={roundTone(round.state)}
+              pulse={round.state === "OPEN"}
+            >
+              {roundLabel(round.state)}
+            </Status>
+            <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
+              <span className="text-faint">closes in</span>
+              <CountdownReadout
+                deadline={round.deadline}
+                className="t-num text-ink"
+              />
+            </span>
+          </div>
 
-        <SolRound
-          roundId={round.id}
-          status={round.state}
-          deadline={round.deadline}
-          models={round.models}
-        />
-      </div>
+          <div className="mt-4 flex flex-col gap-x-10 gap-y-2 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="t-title max-w-[24ch] text-[clamp(1.6rem,2.6vw,2.05rem)] text-ink">
+                {round.brief_title}
+              </h1>
+              <p className="t-body mt-3 max-w-[62ch] text-sm text-muted">
+                {round.brief_text}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-1 lg:flex-col lg:items-end lg:gap-y-1.5">
+              {round.models.map((m) => (
+                <span key={m.id} className="flex items-baseline gap-2">
+                  <span className="t-label text-[0.5625rem] text-faint">
+                    Contender
+                  </span>
+                  <span className="text-[0.8125rem] text-ink">{m.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      )}
 
-      {/* SOL rounds bet live during generation, so the show is always on:
-          each model's code streaming, and its render once that code compiles. */}
-      <LiveRoundPanel roundId={round.id} initialStatus={round.state} />
+      {isLive ? (
+        <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
+          {liveNote}
+        </p>
+      ) : null}
+      {/* Every round is a Devnet SOL round: the wager flow (token meters, ante
+          and live phases, pool, payouts), then the shared live show. */}
+      <SolRound
+        roundId={round.id}
+        status={round.state}
+        deadline={round.deadline}
+        models={round.models}
+      />
+      <LiveRoundPanel
+        roundId={round.id}
+        initialStatus={round.state}
+        className="mt-5"
+      />
     </div>
   );
 }

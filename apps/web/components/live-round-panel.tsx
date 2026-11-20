@@ -8,7 +8,14 @@ import type {
   LiveRoundProgress,
 } from "@ai-showdown/shared";
 import { LiveRenderFrame } from "@/components/live-render-frame";
-import { Meter, Panel, Status, roundLabel, roundTone } from "@/components/ui";
+import {
+  Meter,
+  Panel,
+  Status,
+  cx,
+  roundLabel,
+  roundTone,
+} from "@/components/ui";
 
 /**
  * The live watch surface for a round (F27).
@@ -36,10 +43,13 @@ const TERMINAL_STATUSES = new Set(["SETTLED", "VOIDED", "ARCHIVED"]);
 export function LiveRoundPanel({
   roundId,
   initialStatus,
+  className = "",
 }: {
   roundId: string;
   /** The status the round page already loaded, so the first paint is right. */
   initialStatus: string;
+  /** Placement is the page's call — the round page runs this full width. */
+  className?: string;
 }) {
   const [progress, setProgress] = useState<LiveRoundProgress | null>(null);
   const [status, setStatus] = useState(initialStatus);
@@ -113,9 +123,9 @@ export function LiveRoundPanel({
   }, [load]);
 
   return (
-    <section aria-labelledby="live-heading" className="mt-10">
+    <section aria-labelledby="live-heading" className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="live-heading" className="t-title text-[1.0625rem] text-ink">
+        <h2 id="live-heading" className="t-title text-[0.9375rem] text-ink">
           The round, live
         </h2>
         <div className="flex items-center gap-3">
@@ -147,22 +157,27 @@ export function LiveRoundPanel({
       ) : null}
 
       {progress?.retry ? (
-        <Panel quiet className="mt-4 p-4">
-          <p className="text-sm text-muted">{progress.retry.message}</p>
-        </Panel>
+        <p
+          role="status"
+          className="t-body mt-3 border-l-0 text-[0.8125rem] leading-relaxed text-muted"
+        >
+          {progress.retry.message}
+        </p>
       ) : null}
 
       {progress?.outcome ? (
-        <Panel quiet className="mt-4 p-4">
-          <p className="t-label text-[0.5625rem] text-faint">Outcome</p>
-          <p className="mt-1.5 text-sm text-ink">{progress.outcome.reason}</p>
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="t-label text-[0.5625rem] text-faint">Outcome</span>
+          <p className="t-body min-w-0 flex-1 text-[0.8125rem] text-ink">
+            {progress.outcome.reason}
+          </p>
           <Link
             href={`/results/${progress.roundId}`}
-            className="link t-label mt-2 inline-block text-[0.625rem]"
+            className="link t-label text-[0.625rem]"
           >
             Full result and replay
           </Link>
-        </Panel>
+        </div>
       ) : null}
 
       {progress === null ? (
@@ -172,7 +187,17 @@ export function LiveRoundPanel({
           </p>
         </Panel>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        // Side by side, one column per contender — the product's whole promise is
+        // that the renders happen together, and a column of full-width panels
+        // made a viewer scroll past a whole screen of one model before meeting
+        // the next. The renders lead; the code is a reading under each, not the
+        // exhibit. Two-model rounds get two wider columns rather than one hole.
+        <div
+          className={cx(
+            "mt-4 grid gap-3",
+            progress.models.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2",
+          )}
+        >
           {progress.models.map((model) => (
             <ModelCard
               key={model.modelId}
@@ -239,26 +264,30 @@ function ModelCard({
         : 0
       : Math.min(1, generated / expected);
 
+  // A tile, not a card: three of these share one row, so the glass slab and its
+  // 70px ambient drop (`.panel`) would be three competing surfaces saying
+  // nothing the hairline does not. The render is the content; everything else
+  // is a reading beneath it.
   return (
-    <Panel className="flex flex-col p-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-[0.9375rem] text-ink">{model.name}</p>
+    <div className="flex min-w-0 flex-col rounded-2xl border border-hairline bg-white/[0.015] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[0.875rem] text-ink">{model.name}</p>
         <Status tone={status.tone} pulse={model.state === "generating"}>
           {status.label}
         </Status>
       </div>
 
       {replay ? (
-        <div className="mt-4">
+        <div className="mt-2.5">
           <LiveRenderFrame model={model} replay={replay} />
         </div>
       ) : null}
 
       {generated > 0 ? (
-        <div className="mt-3">
+        <div className="mt-2.5">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="t-label text-[0.5625rem] text-faint">Code</span>
-            <span className="t-num text-[0.625rem] text-muted">
+            <span className="t-label text-[0.5rem] text-faint">Code</span>
+            <span className="t-num text-[0.5625rem] text-muted">
               {complete
                 ? `${generated} chunk${generated === 1 ? "" : "s"} written`
                 : `${generated} of ${expected} chunks`}
@@ -266,7 +295,7 @@ function ModelCard({
           </div>
           <Meter
             value={chunkProgress}
-            className="mt-2"
+            className="mt-1.5"
             label={
               complete
                 ? `${model.name} has finished writing`
@@ -276,28 +305,30 @@ function ModelCard({
         </div>
       ) : null}
 
+      {/* The code pane is a fixed-height window, not a growing block: a model
+          mid-write would otherwise push its neighbours out of the row. */}
       {model.code ? (
         <pre
           ref={codeRef}
-          className="mt-3 max-h-56 overflow-auto rounded-lg border border-hairline bg-void p-3 text-[0.625rem] leading-relaxed text-muted"
+          className="mt-2.5 max-h-40 min-h-24 overflow-auto rounded-lg border border-hairline bg-void/70 p-2.5 text-[0.625rem] leading-relaxed text-muted"
         >
           <code>{model.code}</code>
         </pre>
       ) : (
-        <p className="t-mono mt-3 rounded-lg border border-hairline bg-void p-3 text-[0.625rem] text-faint">
+        <p className="t-mono mt-2.5 min-h-24 rounded-lg border border-hairline bg-void/70 p-2.5 text-[0.625rem] text-faint">
           {model.state === "pending" ? "queued" : "no code yet"}
         </p>
       )}
 
       {model.failure ? (
-        <p className="t-body mt-3 text-xs leading-relaxed text-muted">
+        <p className="t-body mt-2 text-[0.6875rem] leading-relaxed text-muted">
           {model.failure.message}
         </p>
       ) : model.judge?.reason ? (
-        <p className="t-body mt-3 text-xs leading-relaxed text-muted">
+        <p className="t-body mt-2 text-[0.6875rem] leading-relaxed text-muted">
           {model.judge.reason}
         </p>
       ) : null}
-    </Panel>
+    </div>
   );
 }
