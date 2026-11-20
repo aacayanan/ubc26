@@ -6,7 +6,10 @@ import { reconcileSubmittedWagers } from "@/lib/server/services/wagering/wagers"
 import { processPayouts } from "@/lib/server/services/wagering/payouts";
 import { refundCancelledRound } from "@/lib/server/services/wagering/refunds";
 import { retryOperatorRecords } from "@/lib/server/services/wagering/chain-records";
-import { backfillRoundRecords } from "@/lib/server/services/wagering/round-records";
+import {
+  backfillRoundRecords,
+  backfillSettlementRecords,
+} from "@/lib/server/services/wagering/round-records";
 
 /**
  * SOL wagering jobs (Devnet only). Internal: x-internal-job-secret required.
@@ -17,8 +20,9 @@ import { backfillRoundRecords } from "@/lib/server/services/wagering/round-recor
  *   { "action": "refund-cancelled", "roundId": uuid }
  *                                                 queue full refunds for a CANCELLED round
  *   { "action": "chain-records", "roundId"?: uuid }
- *                                                 record missing round memos for open
- *                                                 rounds, then retry round / close /
+ *                                                 record missing round memos (open
+ *                                                 rounds) and settlement memos (settled
+ *                                                 rounds), then retry round / close /
  *                                                 settlement memos not confirmed (F21/F22)
  *
  * All are safe to repeat.
@@ -54,7 +58,10 @@ export async function POST(request: Request) {
           {
             ok: true,
             result: {
-              backfilled: await backfillRoundRecords({ roundId }),
+              backfilled: {
+                rounds: await backfillRoundRecords({ roundId }),
+                settlements: await backfillSettlementRecords({ roundId }),
+              },
               retried: await retryOperatorRecords({ roundId }),
             },
           },

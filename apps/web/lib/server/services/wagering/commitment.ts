@@ -76,15 +76,30 @@ export function closeMemo(input: {
   return `${MEMO_VERSION}:close:${input.roundId}:${input.reason}:${new Date(input.closedAt).toISOString()}:${input.snapshotHash}`;
 }
 
+/**
+ * The settlement record (F22): summary facts only — kind, why, the winning
+ * models, gross / fee / net lamports and how many payouts were queued.
+ * Per-user amounts stay off-chain. A refund names its reason (`voided`,
+ * `no_winner`, `winner_unbacked`), so a void is recorded as a void.
+ */
 export function settleMemo(input: {
   roundId: string;
   kind: string;
+  reason: string;
   winners: string[];
   gross: string;
   fee: string;
   net: string;
   payoutCount: number;
 }): string {
+  const winners = input.winners.length > 0 ? input.winners.join(",") : "none";
+  return `${MEMO_VERSION}:settle:${input.roundId}:${input.kind}:${input.reason}:${winners}:${input.gross}:${input.fee}:${input.net}:${input.payoutCount}`;
+}
+
+/** The format published before the reason was added, for checking old records. */
+export function legacySettleMemo(
+  input: Omit<Parameters<typeof settleMemo>[0], "reason">,
+): string {
   const winners = input.winners.length > 0 ? input.winners.join(",") : "none";
   return `${MEMO_VERSION}:settle:${input.roundId}:${input.kind}:${winners}:${input.gross}:${input.fee}:${input.net}:${input.payoutCount}`;
 }

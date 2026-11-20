@@ -11,6 +11,17 @@ interface ChainRecord {
   memo: string;
   confirmedAt: string | null;
   matchesRound: boolean | null;
+  matchesOutcome: boolean | null;
+  settlement: {
+    kind: string;
+    reason: string;
+    winners: string[];
+    grossLamports: string;
+    feeLamports: string;
+    netLamports: string;
+    payoutCount: number;
+    detail: string;
+  } | null;
   onChain: {
     found: boolean;
     memoMatches: boolean;
@@ -39,6 +50,28 @@ const LABELS: Record<string, { title: string; what: string }> = {
     what: "The result: winning models, the pool, the 5% fee and the payout count.",
   },
 };
+
+function sol(lamports: string): string {
+  return (Number(lamports) / 1_000_000_000).toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+  });
+}
+
+/** One plain line for a settlement record: who was paid, or why it refunded. */
+function settlementLine(s: NonNullable<ChainRecord["settlement"]>): string {
+  if (s.kind === "settled") {
+    return `Paid ${sol(s.netLamports)} SOL to backers of ${s.winners.join(" and ")} · 5% fee ${sol(s.feeLamports)} SOL kept by the treasury · ${s.payoutCount} payout${s.payoutCount === 1 ? "" : "s"}`;
+  }
+  const why =
+    s.reason === "voided"
+      ? "the round was void"
+      : s.reason === "no_winner"
+        ? "no model conformed"
+        : s.reason === "winner_unbacked"
+          ? "nobody backed the conforming model"
+          : s.reason;
+  return `Refunded ${sol(s.grossLamports)} SOL in full because ${why} · no fee · ${s.payoutCount} refund${s.payoutCount === 1 ? "" : "s"}`;
+}
 
 function statusWord(record: ChainRecord): {
   tone: "ink" | "live" | "amber";
@@ -176,6 +209,19 @@ export function RoundRecords({ roundId }: { roundId: string }) {
                 </p>
               ) : null}
 
+              {record.settlement ? (
+                <p className="t-body mt-2 text-[0.75rem] text-muted">
+                  {settlementLine(record.settlement)}
+                </p>
+              ) : null}
+
+              {record.matchesOutcome === false ? (
+                <p className="mt-2 text-xs text-magenta">
+                  This settlement does not match the round&rsquo;s result:{" "}
+                  {record.settlement?.detail}
+                </p>
+              ) : null}
+
               {record.matchesRound === false ? (
                 <p className="mt-2 text-xs text-magenta">
                   This record does not match the round&rsquo;s stored details.
@@ -187,7 +233,8 @@ export function RoundRecords({ roundId }: { roundId: string }) {
                   {record.onChain.found &&
                   record.onChain.memoMatches &&
                   record.onChain.operatorSigned &&
-                  record.matchesRound !== false
+                  record.matchesRound !== false &&
+                  record.matchesOutcome !== false
                     ? `Checked: on Devnet, signed by the operator, matches this round${record.onChain.blockTime ? ` · ${record.onChain.blockTime}` : ""}`
                     : "Check failed: the transaction on Devnet does not match this record."}
                 </p>
