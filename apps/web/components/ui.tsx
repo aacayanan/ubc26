@@ -15,14 +15,17 @@ export function Panel({
   className,
   quiet = false,
   interactive = false,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   quiet?: boolean;
   interactive?: boolean;
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={cx(
         quiet ? "panel-quiet" : "panel",
         interactive && "panel-interactive",

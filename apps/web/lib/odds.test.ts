@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePoolOdds, formatMultiplier } from "./odds";
+import { computeDraftPricing, computePoolOdds, formatMultiplier } from "./odds";
 
 /**
  * F9: "live pool odds".
@@ -101,5 +101,135 @@ describe("formatMultiplier", () => {
   it("renders an em dash for an unbacked model", () => {
     expect(formatMultiplier(null)).toBe("—");
     expect(formatMultiplier(Number.POSITIVE_INFINITY)).toBe("—");
+  });
+});
+
+/**
+ * The draft board ("if you send this now").
+ *
+ * The board's rule is that the number on screen must be the number the pool
+ * would hold the instant the stake landed — no more, no less. These tests pin the
+ * two ways a naive implementation gets that wrong: it *adds* the draft to the
+ * viewer's own stake (silently inflating the pot, because `place_stake` upserts
+ * one stake per account) and it invents a price for an empty market.
+ */
+describe("computeDraftPricing", () => {
+  const stakes = { a: 100, b: 250, c: 150 }; // pot 500
+
+  it("prices each model by its share of the pool", () => {
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: stakes,
+      pickedModelId: null,
+      points: 0,
+    });
+
+    expect(pricing.pot).toBe(500);
+    expect(pricing.models.map((model) => model.percent)).toEqual([20, 50, 30]);
+  });
+
+  it("moves the price the moment a draft stake lands", () => {
+    // Stake 250 on Alpha: pot 750, Alpha 350 -> 46.67%.
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: stakes,
+      pickedModelId: "a",
+      points: 250,
+    });
+
+    expect(pricing.pot).toBe(750);
+    expect(pricing.pickedPercent).toBe(46.67);
+    expect(pricing.pickedDeltaPoints).toBe(26.67);
+    // Buying into a side always thins the payout: 5× becomes 750/350.
+    expect(pricing.pickedDeltaMultiplier).toBe(-2.86);
+    // The rivals' money is unchanged and the pot grew, so they get cheaper.
+    expect(pricing.models.find((model) => model.modelId === "b")?.percent).toBe(
+      33.33,
+    );
+  });
+
+  it("never reports a better payout for the side being bought", () => {
+    // Sweep the stake: the chance rises and the multiplier falls, every time.
+    for (const points of [10, 250, 1000, 5000]) {
+      const pricing = computeDraftPricing({
+        models: MODELS,
+        stakesByModel: stakes,
+        pickedModelId: "b",
+        points,
+      });
+      expect(pricing.pickedDeltaPoints).toBeGreaterThan(0);
+      expect(pricing.pickedDeltaMultiplier).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it("replaces the viewer's own stake instead of adding to it", () => {
+    // The viewer already has 100 on Alpha; raising it to 250 is a replace.
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: stakes,
+      ownStake: { modelId: "a", points: 100 },
+      pickedModelId: "a",
+      points: 250,
+    });
+
+    expect(pricing.pot).toBe(650); // 500 - 100 + 250
+    expect(pricing.models.find((model) => model.modelId === "a")?.staked).toBe(
+      250,
+    );
+  });
+
+  it("moves the viewer's own stake off the model it currently sits on", () => {
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: stakes,
+      ownStake: { modelId: "a", points: 100 },
+      pickedModelId: "c",
+      points: 100,
+    });
+
+    expect(pricing.pot).toBe(500); // same money, different side
+    expect(pricing.models.map((model) => model.percent)).toEqual([0, 50, 50]);
+  });
+
+  it("prices an empty market at zero, never a made-up split", () => {
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: {},
+      pickedModelId: null,
+      points: 0,
+    });
+
+    expect(pricing.pot).toBe(0);
+    expect(pricing.models.every((model) => model.percent === 0)).toBe(true);
+    expect(pricing.models.every((model) => model.multiplier === null)).toBe(
+      true,
+    );
+  });
+
+  it("prices the first stake into an empty pool at the whole pot", () => {
+    // Nobody has disagreed yet, so the backer is the only side.
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: {},
+      pickedModelId: "b",
+      points: 300,
+    });
+
+    expect(pricing.pickedPercent).toBe(100);
+    expect(pricing.models.find((model) => model.modelId === "b")?.multiplier).toBe(
+      1,
+    );
+  });
+
+  it("ignores a draft with no pick and non-positive points", () => {
+    const pricing = computeDraftPricing({
+      models: MODELS,
+      stakesByModel: stakes,
+      pickedModelId: "a",
+      points: -40,
+    });
+
+    expect(pricing.points).toBe(0);
+    expect(pricing.pot).toBe(500);
   });
 });
