@@ -1,5 +1,5 @@
 ---
-name: AI Showdown
+name: Zelto
 description: Organic cybernetic minimalism — monochrome instrumentation lit by one magenta and one violet, with a living WebGL flow-field at its heart.
 colors:
   void: "#05040a"
@@ -91,7 +91,7 @@ components:
     typography: "{typography.label}"
 ---
 
-# Design System: AI Showdown
+# Design System: Zelto
 
 ## Overview
 

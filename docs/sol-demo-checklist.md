@@ -29,29 +29,31 @@ Design and trust boundary: [`solana-integration.md`](solana-integration.md).
 2. **Round page** → pick a model → **Sign the ante in Phantom**. Status goes
    _Approve in Phantom → Confirming on Devnet → Accepted_, with an Explorer
    link. Only "Accepted" counts.
-3. At the deadline: `POST /api/internal/jobs/lock-rounds`, then
-   `POST /api/internal/jobs/run-rounds {"roundId": …}` (header
-   `x-internal-job-secret`). Generation starts; **live betting opens**.
+3. At the deadline the app advances itself: the in-process scheduler locks the
+   round and starts generation within ~2 s, and **live betting opens**. Nothing
+   to curl. (`POST /api/internal/jobs/tick` runs the same pass by hand if you
+   want to watch it happen; `ROUND_SCHEDULER=off` disables the scheduler.)
 4. Watch code + previews stream and token bars climb toward the 75% marker.
    Place a **live wager** or two; the multipliers move only after acceptance.
 5. The first model to reach 75% (or finish/fail) **closes betting** — the
    banner names the model and reason; the close memo posts to Devnet.
-6. Judging runs after the close. Then `POST /api/internal/jobs/settle-rounds
-   {"roundId": …}` and `POST /api/internal/jobs/sol {"action": "payouts",
-   "roundId": …}`. Payouts show **Paid** with Explorer links only once
+6. Judging runs after the close, then settlement and payouts follow on their own
+   within a few seconds. Payouts show **Paid** with Explorer links only once
    confirmed; the settlement memo is a record, shown separately.
 
 ## Recovery
 
-| Symptom                              | Action                                                                  |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| Wager stuck "confirming"             | `POST /api/internal/jobs/sol {"action":"reconcile","roundId":…}`        |
-| Settlement says wagers in flight     | reconcile, then settle again (safe to repeat)                           |
-| Payout "Sending"/uncertain           | run the payouts job again — it never double-pays                        |
-| Payouts "On hold"                    | treasury short; fund it, then set those rows back to `pending`          |
-| Round cancelled                      | `POST /api/internal/jobs/sol {"action":"refund-cancelled","roundId":…}` then payouts |
-| 429 from Devnet                      | switch `SOLANA_RPC_URL` to a dedicated Devnet RPC                       |
-| Phantom shows a mainnet warning      | Testnet mode is off — turn it on                                        |
+| Symptom                              | Action                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| Round past its deadline, still OPEN  | Check the server log for `automation.tick.failed`; `ROUND_SCHEDULER` must not be `off` |
+| ------------------------------------ | -----------------------------------------------------------------------                |
+| Wager stuck "confirming"             | `POST /api/internal/jobs/sol {"action":"reconcile","roundId":…}`                       |
+| Settlement says wagers in flight     | reconcile, then settle again (safe to repeat)                                          |
+| Payout "Sending"/uncertain           | run the payouts job again — it never double-pays                                       |
+| Payouts "On hold"                    | treasury short; fund it, then set those rows back to `pending`                         |
+| Round cancelled                      | `POST /api/internal/jobs/sol {"action":"refund-cancelled","roundId":…}` then payouts   |
+| 429 from Devnet                      | switch `SOLANA_RPC_URL` to a dedicated Devnet RPC                                      |
+| Phantom shows a mainnet warning      | Testnet mode is off — turn it on                                                       |
 
 ## Say on camera
 

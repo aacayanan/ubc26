@@ -97,7 +97,7 @@ retired term for the pre-pivot coding-test format.
 
 ## Brand Commitments
 
-- Product name: **AI Showdown**.
+- Product name: **Zelto**.
 - Consumer UX first: a person must never need blockchain knowledge to use the
   product.
 - Points and leaderboards only — no tokens, no NFTs, no real money.

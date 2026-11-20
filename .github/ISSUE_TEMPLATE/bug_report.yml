@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in AI Showdown.
+description: Report a reproducible problem in Zelto.
 title: "[Bug]: "
 labels:
   - bug

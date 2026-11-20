@@ -133,8 +133,16 @@ export async function runRoundPipeline(
   // re-picking it. Without this the round stays LOCKED forever, which both
   // misreports it to the viewer and makes `listRoundsForPipeline` hand the same
   // finished round back on every tick.
+  //
+  // This is also the **claim**. The scheduled driver and a manual job can both
+  // see the same LOCKED round; `transition_round` with an expected status is a
+  // compare-and-set, so only one of them moves it. The loser gets a conflict and
+  // must stop before generating anything — otherwise two processes would render
+  // the same round and double the provider bill.
   if (inputs.status === "LOCKED") {
-    await moveRoundTo(supabase, roundId, "RUNNING");
+    await moveRoundTo(supabase, roundId, "RUNNING", {
+      expectedStatus: "LOCKED",
+    });
   }
 
   logger.info("pipeline.round.started", {
@@ -539,14 +547,26 @@ async function moveRoundTo(
   supabase: SupabaseClient,
   roundId: string,
   target: RoundStatus,
+  options: { expectedStatus?: RoundStatus } = {},
 ): Promise<void> {
   const { error } = await supabase.rpc("transition_round", {
     p_round_id: roundId,
     p_to_status: target,
     p_reason: `pipeline: ${target.toLowerCase()}`,
+    ...(options.expectedStatus
+      ? { p_expected_status: options.expectedStatus }
+      : {}),
   });
 
   if (error) {
+    // A failed compare-and-set means another runner claimed this round between
+    // our read and our transition. That is a normal race, not a fault: report it
+    // as a conflict so the caller skips the round instead of retrying it.
+    if (options.expectedStatus && /changed concurrently/i.test(error.message)) {
+      throw new ConflictError(
+        `Round ${roundId} was claimed by another runner; skipped.`,
+      );
+    }
     throw new InternalError(`Failed to move the round to ${target}`, error);
   }
 }

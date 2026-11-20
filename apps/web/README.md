@@ -1,6 +1,6 @@
-# AI Showdown — Web App
+# Zelto — Web App
 
-Next.js application for AI Showdown. The [root README](../README.md)
+Next.js application for Zelto. The [root README](../README.md)
 covers setup, environment configuration, database migrations, Docker,
 and architecture — this file only notes what is specific to this
 workspace.

@@ -1,4 +1,4 @@
-# AI Showdown — Requirements & Build Order
+# Zelto — Requirements & Build Order
 
 Last updated: 2026-11-20. Source: project spec + decisions confirmed with the team.
 

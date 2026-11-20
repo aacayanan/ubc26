@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Production image for the AI Showdown web app (monorepo: apps/web).
+# Production image for the Zelto web app (monorepo: apps/web).
+# The image tag keeps the working name so existing builds keep resolving.
 # Build from the repository root:  docker build -t ai-showdown .
 # Run:                             docker run --rm -p 3000:3000 ai-showdown
 

@@ -5,7 +5,7 @@ primary_target: "apps/web/app"
 related_targets: []
 ---
 
-# Surface: AI Showdown web app
+# Surface: Zelto web app
 
 ## Scope and visitor mode
 

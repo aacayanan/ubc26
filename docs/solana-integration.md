@@ -185,7 +185,7 @@ own words.
   everyone was refunded.
 - Payouts and refunds really happened.
 
-**What you still trust AI Showdown for:**
+**What you still trust Zelto for:**
 
 - That the models and the judge were honest.
 - That betting closed by the stated rule. The server enforces it; the chain only
@@ -218,7 +218,7 @@ No blockchain knowledge is required; a signature prompt is.
 | The models ran honestly and the judge was impartial                            | **Trusted backend** — not verifiable on-chain                                                 |
 | The funds are held safely                                                      | **Trusted operator** — the treasury is an operator key, not a program                         |
 
-**What users must trust AI Showdown to do:** run the models and the judge
+**What users must trust Zelto to do:** run the models and the judge
 honestly; close betting by the stated rule and never co-sign after it; hold the
 pooled SOL in the treasury and not spend or lose it; send every payout and
 refund; compute the split correctly. Memo provides no escrow and enforces no
