@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { TxPurpose } from "@ai-showdown/shared";
 import { InternalError } from "@/lib/server/errors/app-error";
 import { logger } from "@/lib/server/logging/logger";
 import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
@@ -19,7 +20,7 @@ import {
  * `failed` row, never shown as confirmed, and never blocks the round.
  */
 export async function recordOperatorMemo(input: {
-  purpose: "round_record" | "betting_close" | "settlement";
+  purpose: Extract<TxPurpose, "round_record" | "betting_close" | "settlement">;
   idempotencyKey: string;
   roundId: string;
   memo: string;

@@ -4,15 +4,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RoundStatus } from "@ai-showdown/shared";
 import { InternalError } from "@/lib/server/errors/app-error";
 
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
 /**
  * A user's prediction history (F26).
  *
- * The `predictions` table already holds everything a stake row needs, and RLS
- * scopes reads to the owner — but the page is a client component with no API,
- * so this reads with the service role for an explicit user id instead.
+ * Predictions are accepted Devnet SOL wagers (`public.wagers`); the points
+ * pool is retired. RLS scopes reads to the owner, but the page is a client
+ * component, so this reads with the service role for an explicit user id.
  *
- * Points are settled, not escrowed (F18): an open stake shows its `stake_points`
- * with no outcome; a settled one shows `settlement_outcome` and what it returned.
+ * An open wager shows its amount with no outcome; a settled one shows
+ * `settlement_outcome` (`refunded` reads as void) and its payout.
  *
  * Two separate axes, and the page needs both:
  *
@@ -36,10 +38,10 @@ export interface StakeRecord {
   roundId: string;
   briefTitle: string;
   pickedModel: string;
-  /** What the account put at risk. */
-  points: number;
-  /** What it returned; null until settlement writes a payout. */
-  awarded: number | null;
+  /** Devnet SOL wagered. */
+  amountSol: number;
+  /** Devnet SOL returned; null until settlement writes an outcome. */
+  payoutSol: number | null;
   /** Settlement ruling; null until the round settles. */
   outcome: "won" | "lost" | "void" | null;
   state: StakeState;
@@ -103,19 +105,19 @@ export async function listUserStakes(
   userId: string,
   supabase: SupabaseClient,
 ): Promise<StakeRecord[]> {
-  // `predictions` has no direct FK to `llm_models` — its only model reference is
+  // `wagers` has no direct FK to `llm_models` — its only model reference is
   // the composite FK to `round_models(round_id, model_id)`. PostgREST embeds
   // follow declared FKs, so `llm_models(name)` off `predictions` is not a
   // relationship and the whole query 400s. The pick's name comes back through
   // `rounds → round_models → llm_models` instead, which is the path every other
   // query in this codebase takes.
   const { data, error } = await supabase
-    .from("predictions")
+    .from("wagers")
     .select(
-      "id, round_id, model_id, stake_points, points_awarded, settlement_outcome, created_at, rounds(status, challenges(title), round_models(model_id, llm_models(name)))",
+      "id, round_id, model_id, lamports, payout_lamports, settlement_outcome, created_at, rounds(status, challenges(title), round_models(model_id, llm_models(name)))",
     )
     .eq("user_id", userId)
-    .eq("category", "conformance")
+    .eq("status", "accepted")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -127,8 +129,8 @@ export async function listUserStakes(
       id: string;
       round_id: string;
       model_id: string;
-      stake_points: number | null;
-      points_awarded: number | null;
+      lamports: number | string | null;
+      payout_lamports: number | string | null;
       settlement_outcome: string | null;
       created_at: string;
       rounds:
@@ -166,11 +168,11 @@ export async function listUserStakes(
       : rosterEntry?.llm_models;
 
     const outcome =
-      row.settlement_outcome === "won" ||
-      row.settlement_outcome === "lost" ||
-      row.settlement_outcome === "void"
+      row.settlement_outcome === "won" || row.settlement_outcome === "lost"
         ? row.settlement_outcome
-        : null;
+        : row.settlement_outcome === "refunded"
+          ? "void"
+          : null;
 
     const roundStatus = round?.status ?? "";
 
@@ -179,8 +181,11 @@ export async function listUserStakes(
       roundId: row.round_id,
       briefTitle: challenge?.title ?? "Round",
       pickedModel: model?.name ?? "Model",
-      points: row.stake_points ?? 0,
-      awarded: outcome === null ? null : (row.points_awarded ?? 0),
+      amountSol: Number(row.lamports ?? 0) / LAMPORTS_PER_SOL,
+      payoutSol:
+        outcome === null
+          ? null
+          : Number(row.payout_lamports ?? 0) / LAMPORTS_PER_SOL,
       outcome,
       state: deriveState(roundStatus, outcome),
       roundStatus,

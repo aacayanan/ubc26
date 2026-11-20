@@ -75,6 +75,61 @@ only once no wager is still confirming.
   provably dead, so it cannot be paid twice. If the treasury cannot cover a
   round, the round's payouts are put on hold — nobody is paid partially.
 
+### Commitments and verification (F20, as shipped)
+
+F20 shipped against the wager shape above, not the `aisd:v1:stake` /
+`place_stake` sequence in the G1 record below (points stakes are retired). How
+each F20 requirement is met:
+
+| Requirement                    | Where it lives                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A Phantom account can wager    | `20261120000600_siws_wallet_on_signup.sql` writes the `wallets` row at signup (and backfilled); `resolveWagerWallet` keeps a lazy bridge as a fallback |
+| User-signed, operator-paid     | `buildWagerTransaction` / `coSignVerifiedWager` (`lib/server/integrations/solana/transactions.ts`)                                                     |
+| Memo carries the hash only     | `aisd:v2:wager:<roundId>:<wagerId>:<commitment>`; the nonce lives in `wagers.commitment_nonce` (owner-readable via the verify endpoint only)           |
+| One wager, one transaction     | every ante or live wager is its own prepared transaction, hash and memo                                                                                |
+| Status persisted and visible   | `wagers.status` prepared → submitted → accepted / rejected / expired, shown in the round's wager panel; a declined signature writes nothing            |
+| Commitment immutable           | `20261120000700_freeze_wager_commitments.sql`: commitment + preimage columns frozen from insert; signature and settlement write-once                   |
+| Wallet ownership proof         | `wager_resolve` sets `wallets.verified_at` when a wager from that address is accepted                                                                  |
+| Devnet only                    | genesis-hash check on every connection (`connection.ts`)                                                                                               |
+| `TxPurpose` mirror             | `TX_PURPOSES` / `TxPurpose` in `packages/shared/src/index.ts`                                                                                          |
+| Verify on demand, as the owner | `GET /api/wagers/[id]/verify` (owner-scoped) and the **Verify on Devnet** button on My predictions and the round's wager list                          |
+| Demonstrable verification      | `scripts/verify-commitment.mjs --signature <sig>` (or `--wager <id>`); same checks, exits non-zero on any failure                                      |
+
+**The checks** (`lib/server/services/wagering/verify.ts`, shared by the
+endpoint, the panel and the script), each re-derived from Devnet on every call:
+
+1. the transaction exists on Devnet and did not fail;
+2. the account's wallet is a required signer;
+3. the memo is exactly `aisd:v2:wager:<roundId>:<wagerId>:<stored hash>`;
+4. the memo contains neither the pick (model id) nor the nonce;
+5. the treasury's balance changed by exactly the wagered lamports;
+6. the block time beats the wager's boundary — the ante deadline for an ante,
+   `betting_closed_at` for a live wager — plus a 120 s landing window;
+7. the disclosed preimage re-hashes to the stored, memo-carried hash.
+
+**Why the landing window keeps pre-flight and verification consistent.** The
+server reserves a wager under the round lock only while its window is open
+(`wager_reserve`: ante while `now() <= prediction_deadline`, live while
+`betting_phase = 'live'`). Reservation happens before broadcast, and the
+transaction's blockhash was fetched before reservation and expires about 150
+blocks (~60–90 s) later. So any wager that passed reservation either lands by
+`boundary + 120 s` or never lands. Verification checks exactly that bound, so a
+wager cannot pass the server's check and then fail verification. The 120 s also
+absorbs the validator-estimated skew in `blockTime`.
+
+**Run it** (operator/demo tool; it reads the stored preimage with the service
+role, and signs and writes nothing):
+
+```sh
+cd apps/web
+npx tsx --conditions=react-server --env-file=.env.local --tsconfig tsconfig.json \
+  ../../scripts/verify-commitment.mjs --signature <tx signature>
+```
+
+**Scope.** A pass proves the commitment existed on Devnet inside its window and
+was not altered. It does **not** prove that the models, the judge or settlement
+were run honestly; every verification surface says so.
+
 ### What the chain proves — and what it does not
 
 | Claim                                                                          | Who guarantees it                                                             |
@@ -112,6 +167,11 @@ legal.
 ---
 
 # G1 record (2026-11-19, historical)
+
+> **F20 shipped against the SOL wager shape** — see _Commitments and
+> verification (F20, as shipped)_ above. The `aisd:v1:stake` memo, the
+> `place_stake` sequence and the `predictions.commitment_hash` freeze below
+> describe the retired points path and are kept as history.
 
 **Decided 2026-11-19.** This record settles the one gated row in the
 [decisions log](../REQUIREMENTS.md#decisions-log): what the chain is used for,
@@ -498,6 +558,5 @@ correcting the comments then is fine.
    against the Phantom version used in the demo. If it does display the memo, the
    rung-2 caveat is softer than stated — which is a pleasant surprise, not a
    problem.
-8. **`TxPurpose` has no TypeScript mirror.** `packages/shared/src/index.ts`
-   mirrors `TxStatus` only. F20 should add the enum so a writer cannot put an
-   arbitrary string in a `purpose` column.
+8. ~~**`TxPurpose` has no TypeScript mirror.**~~ Resolved (F20): `TX_PURPOSES`
+   / `TxPurpose` in `packages/shared/src/index.ts`.

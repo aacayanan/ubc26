@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EmptyState, PageHeader, Panel, Status } from "@/components/ui";
+import { VerifyCommitment } from "@/components/verify-commitment";
 
 type StakeState =
   "open" | "locked" | "running" | "settling" | "won" | "lost" | "void";
@@ -12,13 +13,17 @@ interface StakeRecord {
   roundId: string;
   briefTitle: string;
   pickedModel: string;
-  points: number;
-  awarded: number | null;
+  amountSol: number;
+  payoutSol: number | null;
   outcome: "won" | "lost" | "void" | null;
   state: StakeState;
   roundStatus: string;
   resultHref: string | null;
   createdAt: string;
+}
+
+function formatSol(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 type Tone = "live" | "violet" | "ink" | "amber" | "idle";
@@ -66,7 +71,7 @@ function stateNote(stake: StakeRecord): string {
     case "lost":
       return "Your model did not take the conformance outcome.";
     case "void":
-      return "The round did not produce a winner, so the stake returned nothing and cost nothing.";
+      return "The round did not produce a winner, so the wager is refunded.";
   }
 }
 
@@ -107,7 +112,7 @@ export default function PredictionsPage() {
     <div className="shell py-12 sm:py-14">
       <PageHeader
         title="My predictions"
-        description="Every stake you have placed and what it returned. A stake resolves when the round settles — the points pool splits pro-rata among everyone who staked on the model that conformed."
+        description="Every Devnet SOL prediction you have placed and what it returned. A prediction resolves when the round settles — the pool splits pro-rata among everyone who wagered on the model that conformed."
       />
 
       <div className="mt-10">
@@ -121,15 +126,16 @@ export default function PredictionsPage() {
           </Panel>
         ) : stakes.length === 0 ? (
           <EmptyState
-            title="You haven't staked on a round yet."
+            title="You haven't made a prediction yet."
             action={
               <Link href="/competitions" className="btn btn-ghost btn-sm">
                 Browse rounds
               </Link>
             }
           >
-            Join an open round and stake points on the model you think follows
-            the brief. Your commitment is sealed before anything renders.
+            Join an open round and wager Devnet SOL on the model you think
+            follows the brief. Your commitment is sealed before anything
+            renders.
           </EmptyState>
         ) : (
           <ul className="grid gap-3">
@@ -147,8 +153,8 @@ export default function PredictionsPage() {
                           {stake.briefTitle}
                         </Link>
                         <p className="t-mono mt-1 text-[0.6875rem] text-faint">
-                          {stake.pickedModel} · {stake.points} pts ·{" "}
-                          {new Date(stake.createdAt).toLocaleDateString()}
+                          {stake.pickedModel} · {formatSol(stake.amountSol)} SOL
+                          · {new Date(stake.createdAt).toLocaleDateString()}
                         </p>
                         <p className="t-body mt-2 text-xs text-muted">
                           {stateNote(stake)}
@@ -157,9 +163,12 @@ export default function PredictionsPage() {
 
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <Status tone={status.tone}>{status.label}</Status>
-                        {stake.awarded !== null ? (
+                        {stake.payoutSol !== null ? (
                           <span className="t-num text-[0.8125rem] text-muted">
-                            {stake.awarded > 0 ? `+${stake.awarded}` : "0"} pts
+                            {stake.payoutSol > 0
+                              ? `+${formatSol(stake.payoutSol)}`
+                              : "0"}{" "}
+                            SOL
                           </span>
                         ) : null}
                         {stake.resultHref ? (
@@ -172,6 +181,11 @@ export default function PredictionsPage() {
                         ) : null}
                       </div>
                     </div>
+                    {/* F20: every listed prediction is an accepted wager with a
+                        signed Devnet memo, so each one can be checked. */}
+                    <div className="mt-3 border-t border-hairline pt-3">
+                      <VerifyCommitment wagerId={stake.id} />
+                    </div>
                   </Panel>
                 </li>
               );
@@ -182,7 +196,7 @@ export default function PredictionsPage() {
 
       <Panel quiet className="mt-8 px-5 py-4">
         <p className="t-body text-xs text-faint">
-          Points only. Stakes never convert to money and are never transferable.
+          Devnet test SOL only. It has no value and never converts to money.
         </p>
       </Panel>
     </div>
