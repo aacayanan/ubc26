@@ -36,10 +36,11 @@ crowd verdict.
 
 Conformance is measured; "best" is the crowd's. The two are never conflated,
 and no vote or visible render can exist before the staking deadline. A
-prediction placed after the outcome is visible is provably impossible because
-the commitment is sealed on Solana Devnet before the deadline. Most AI
-leaderboards publish a number nobody can audit; this one publishes a bet nobody
-can backdate.
+commitment placed after the outcome is visible is provably impossible: its hash
+is recorded on Solana Devnet before the deadline, so it cannot be backdated.
+The chain proves the hash existed in time; which model it names is disclosed by
+the backer, not readable by strangers. Most AI leaderboards publish a number
+nobody can audit; this one publishes a commitment nobody can backdate.
 
 ## Operating Context
 
@@ -67,11 +68,16 @@ can backdate.
 - API credentials stay server-side.
 - Solana Devnet for all blockchain interaction during development.
 
-**What Solana does and does not guarantee.** On-chain: prediction commitments
-(hashes), round IDs and deadlines, deadline enforcement, verifiable prediction
-history, settlement records. Not on-chain: whether model execution or scoring
-was honest — that remains a trusted-backend claim. This distinction must
-survive into any user- or judge-facing material.
+**What Solana does and does not guarantee.** On-chain (G1 — lightweight SPL Memo
+transactions, no custom program): prediction commitments (hashes) signed by the
+user's wallet, round IDs and deadlines, and a settlement record. These are
+records, **not enforcement** — the deadline is enforced by the backend, and the
+chain only proves a commitment existed before it. Not on-chain: whether model
+execution or scoring was honest, whether the judge was impartial, or whether a
+commitment backed a stake that counted in the pool — those remain
+trusted-backend claims. Devnet is disposable, so these are demo-grade
+guarantees. This distinction must survive into any user- or judge-facing
+material. Full record: `docs/solana-integration.md`.
 
 **Stack (existing):** Next.js 16 App Router, TypeScript, Tailwind CSS v4
 (CSS-first `@theme`, no config file), Supabase (Postgres + auth + RLS),
