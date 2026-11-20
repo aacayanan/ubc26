@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import type {
-  ResultDisplayState,
-  RenderedFrame,
-} from "@ai-showdown/shared";
+import type { ResultDisplayState, RenderedFrame } from "@ai-showdown/shared";
 import {
   CrosshairMark,
   Meter,
@@ -27,7 +24,8 @@ interface ApiModel {
   model_id: string;
   name: string;
   ordinal: number;
-  status: "conformed" | "not_conformed" | "forfeited" | "unavailable" | "pending";
+  status:
+    "conformed" | "not_conformed" | "forfeited" | "unavailable" | "pending";
   forfeit_reason: string | null;
   gate: {
     passed: boolean;
@@ -78,7 +76,7 @@ interface ApiResult {
     all_forfeited: boolean;
   } | null;
   pool: {
-    pot_points: number;
+    pot_sol: number;
     models: Array<{
       model_id: string;
       name: string;
@@ -87,20 +85,23 @@ interface ApiResult {
       share: number;
     }>;
   };
-  crowd: { counts: Record<string, number>; award_points: number } | null;
+  crowd: { counts: Record<string, number> } | null;
   models: ApiModel[];
   viewer_stake: {
     model_id: string;
-    points: number;
+    amount_sol: number;
     outcome: "won" | "lost" | "void" | null;
-    awarded: number | null;
+    payout_sol: number | null;
   } | null;
 }
 
 type Tone = "live" | "violet" | "ink" | "amber" | "idle";
 
 /** Dot tone + word for a model's conformance status. Amber is never used here. */
-function modelStatus(status: ApiModel["status"]): { tone: Tone; label: string } {
+function modelStatus(status: ApiModel["status"]): {
+  tone: Tone;
+  label: string;
+} {
   switch (status) {
     case "conformed":
       return { tone: "ink", label: "Conformed" };
@@ -116,24 +117,46 @@ function modelStatus(status: ApiModel["status"]): { tone: Tone; label: string } 
 }
 
 /** The overall outcome wording, driven by the resolved display state. */
-function displayStateCopy(
-  state: ResultDisplayState,
-): { tone: Tone; label: string; headline: string } {
+function displayStateCopy(state: ResultDisplayState): {
+  tone: Tone;
+  label: string;
+  headline: string;
+} {
   switch (state) {
     case "winner":
-      return { tone: "ink", label: "Settled", headline: "A model conformed to the brief" };
+      return {
+        tone: "ink",
+        label: "Settled",
+        headline: "A model conformed to the brief",
+      };
     case "tie":
-      return { tone: "violet", label: "Settled", headline: "More than one model conformed" };
+      return {
+        tone: "violet",
+        label: "Settled",
+        headline: "More than one model conformed",
+      };
     case "all-forfeited":
-      return { tone: "violet", label: "Void", headline: "Every model forfeited" };
+      return {
+        tone: "violet",
+        label: "Void",
+        headline: "Every model forfeited",
+      };
     case "no-conformer":
       return { tone: "violet", label: "Void", headline: "No model conformed" };
     case "judge-unavailable":
-      return { tone: "violet", label: "Pending", headline: "The judge could not rule yet" };
+      return {
+        tone: "violet",
+        label: "Pending",
+        headline: "The judge could not rule yet",
+      };
     case "voided":
       return { tone: "violet", label: "Void", headline: "This round was void" };
     case "pending":
-      return { tone: "violet", label: "Pending", headline: "This round is not settled yet" };
+      return {
+        tone: "violet",
+        label: "Pending",
+        headline: "This round is not settled yet",
+      };
   }
 }
 
@@ -250,7 +273,13 @@ export default function ResultDetailPage() {
 
       {/* Three rendered artifacts side by side, each replayable. */}
       <section className="mt-10">
-        <SectionHeading aside={<span className="t-mono text-[0.625rem] text-faint">{state.headline}</span>}>
+        <SectionHeading
+          aside={
+            <span className="t-mono text-[0.625rem] text-faint">
+              {state.headline}
+            </span>
+          }
+        >
           The renders
         </SectionHeading>
 
@@ -267,19 +296,27 @@ export default function ResultDetailPage() {
 
       {/* Final odds vs outcome. */}
       <section className="mt-12">
-        <SectionHeading aside={<span className="t-mono text-[0.625rem] text-faint">final odds</span>}>
+        <SectionHeading
+          aside={
+            <span className="t-mono text-[0.625rem] text-faint">
+              final odds
+            </span>
+          }
+        >
           The pool
         </SectionHeading>
 
         <Panel className="mt-4 p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <p className="t-body text-sm text-muted">
-              Points staked on which model would conform. Backers of the winner
-              split the pot pro-rata.
+              Devnet SOL wagered on which model would conform. Backers of the
+              winner split the pot pro-rata.
             </p>
             <p className="t-num text-[1.375rem] text-ink">
-              {result.pool.pot_points.toLocaleString()}
-              <span className="ml-1 text-xs text-muted">pts</span>
+              {result.pool.pot_sol.toLocaleString(undefined, {
+                maximumFractionDigits: 4,
+              })}
+              <span className="ml-1 text-xs text-muted">SOL</span>
             </p>
           </div>
 
@@ -300,11 +337,15 @@ export default function ResultDetailPage() {
                 <div className="w-24 text-right">
                   <p className="t-mono text-[0.625rem] text-faint">staked</p>
                   <p className="t-num text-[0.8125rem] text-ink">
-                    {model.staked.toLocaleString()}
+                    {model.staked.toLocaleString(undefined, {
+                      maximumFractionDigits: 4,
+                    })}
                   </p>
                 </div>
                 <div className="w-24 text-right">
-                  <p className="t-mono text-[0.625rem] text-faint">multiplier</p>
+                  <p className="t-mono text-[0.625rem] text-faint">
+                    multiplier
+                  </p>
                   <p
                     className={
                       model.multiplier === null
@@ -334,15 +375,16 @@ export default function ResultDetailPage() {
           {result.crowd && Object.keys(result.crowd.counts).length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="t-label text-[0.5625rem] text-faint">Fan favorite</p>
+                <p className="t-label text-[0.5625rem] text-faint">
+                  Fan favorite
+                </p>
                 <p className="mt-1.5 text-[1.0625rem] text-ink">
                   {modelName(result, outcome?.fan_favorite_model_id) ?? "—"}
                 </p>
               </div>
               <p className="t-body max-w-[46ch] text-xs text-muted">
-                Each account that voted for the crowd&rsquo;s pick earns{" "}
-                {result.crowd.award_points} points. The vote never changes the
-                conformance outcome.
+                The crowd vote never moves SOL and never changes the conformance
+                outcome.
               </p>
             </div>
           ) : (
@@ -377,7 +419,7 @@ export default function ResultDetailPage() {
       {/* The viewer's own stake, when there is one. */}
       {result.viewer_stake ? (
         <section className="mt-12">
-          <SectionHeading>Your stake</SectionHeading>
+          <SectionHeading>Your prediction</SectionHeading>
           <Panel className="mt-4 flex flex-wrap items-center justify-between gap-4 p-6">
             <div>
               <p className="t-label text-[0.5625rem] text-faint">You backed</p>
@@ -387,18 +429,25 @@ export default function ResultDetailPage() {
             </div>
             <div className="flex items-center gap-8">
               <Readout
-                label="Staked"
-                value={result.viewer_stake.points.toLocaleString()}
-                suffix="pts"
+                label="Wagered"
+                value={result.viewer_stake.amount_sol.toLocaleString(
+                  undefined,
+                  { maximumFractionDigits: 4 },
+                )}
+                suffix="SOL"
               />
               <Readout
                 label="Returned"
                 value={
-                  result.viewer_stake.awarded === null
+                  result.viewer_stake.payout_sol === null
                     ? "—"
-                    : result.viewer_stake.awarded.toLocaleString()
+                    : result.viewer_stake.payout_sol.toLocaleString(undefined, {
+                        maximumFractionDigits: 4,
+                      })
                 }
-                suffix={result.viewer_stake.awarded === null ? undefined : "pts"}
+                suffix={
+                  result.viewer_stake.payout_sol === null ? undefined : "SOL"
+                }
               />
               <Status
                 tone={result.viewer_stake.outcome === "won" ? "ink" : "idle"}

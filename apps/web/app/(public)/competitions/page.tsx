@@ -234,8 +234,8 @@ function RoundCard({
       <div className="mt-auto flex items-baseline justify-between gap-3 border-t border-hairline pt-2.5">
         <span className="t-label text-[0.5rem] text-faint">Pot</span>
         <span className="t-num text-[0.8125rem] leading-none text-ink">
-          {round.pot.toLocaleString()}
-          <span className="ml-1 text-[0.625rem] text-muted">pts</span>
+          {round.pot.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+          <span className="ml-1 text-[0.625rem] text-muted">SOL</span>
         </span>
       </div>
     </Link>
@@ -273,7 +273,7 @@ export default function CompetitionsPage() {
             challenge_preview: string;
             models: string[];
             deadline: string;
-            potential_points: number;
+            pool_sol: number;
             pool_capacity: number;
             odds: Array<{
               model_id: string;
@@ -311,7 +311,7 @@ export default function CompetitionsPage() {
             preview: competition.challenge_preview,
             models: competition.models,
             deadline: competition.deadline,
-            pot: competition.potential_points,
+            pot: competition.pool_sol ?? 0,
             capacity: competition.pool_capacity,
             odds: (competition.odds ?? []).map((model) => ({
               modelId: model.model_id,

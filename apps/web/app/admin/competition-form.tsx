@@ -20,8 +20,6 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
   const [challengeId, setChallengeId] = useState(challenges[0]?.id ?? "");
   const [modelIds, setModelIds] = useState<string[]>([]);
   const [deadline, setDeadline] = useState("");
-  // Devnet SOL wagering round (valueless test SOL). Off = the points pool.
-  const [solRound, setSolRound] = useState(true);
   const [feePercent, setFeePercent] = useState("5");
   const [stallSeconds, setStallSeconds] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -89,14 +87,11 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
           challengeId,
           modelIds,
           predictionDeadline: deadlineDate.toISOString(),
-          ...(solRound
-            ? {
-                wageringMode: "devnet_sol",
-                feeBps: Math.round(Number(feePercent) * 100),
-                stallTimeoutSeconds:
-                  stallSeconds.trim() === "" ? null : Number(stallSeconds),
-              }
-            : {}),
+          // Every round is a Devnet SOL round (valueless test SOL).
+          wageringMode: "devnet_sol",
+          feeBps: Math.round(Number(feePercent) * 100),
+          stallTimeoutSeconds:
+            stallSeconds.trim() === "" ? null : Number(stallSeconds),
         }),
       });
       const body = await response.json();
@@ -216,41 +211,33 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
       </label>
 
       <fieldset className="space-y-3 rounded-xl border border-hairline p-4">
-        <label className="flex items-center gap-3 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={solRound}
-            onChange={(event) => setSolRound(event.target.checked)}
-            className="size-4 accent-[var(--violet)]"
-          />
-          Devnet SOL wagering round
-        </label>
-        {solRound ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="t-label text-[0.625rem] text-faint">
-                Platform fee (%)
-              </span>
-              <input
-                inputMode="decimal"
-                value={feePercent}
-                onChange={(event) => setFeePercent(event.target.value)}
-                className="field t-num mt-2"
-              />
-            </label>
-            <label className="block">
-              <span className="t-label text-[0.625rem] text-faint">
-                Stall safeguard (s, blank = off)
-              </span>
-              <input
-                inputMode="numeric"
-                value={stallSeconds}
-                onChange={(event) => setStallSeconds(event.target.value)}
-                className="field t-num mt-2"
-              />
-            </label>
-          </div>
-        ) : null}
+        <legend className="t-label px-1 text-[0.625rem] text-faint">
+          Devnet SOL wagering
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="t-label text-[0.625rem] text-faint">
+              Platform fee (%)
+            </span>
+            <input
+              inputMode="decimal"
+              value={feePercent}
+              onChange={(event) => setFeePercent(event.target.value)}
+              className="field t-num mt-2"
+            />
+          </label>
+          <label className="block">
+            <span className="t-label text-[0.625rem] text-faint">
+              Stall safeguard (s, blank = off)
+            </span>
+            <input
+              inputMode="numeric"
+              value={stallSeconds}
+              onChange={(event) => setStallSeconds(event.target.value)}
+              className="field t-num mt-2"
+            />
+          </label>
+        </div>
         <p className="t-mono text-[0.625rem] text-faint">
           The deadline above becomes the $5 ante deadline. Live betting runs
           during generation and closes when the first model reaches 75% of its

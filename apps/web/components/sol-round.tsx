@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Transaction } from "@solana/web3.js";
 import { CountdownReadout } from "@/components/countdown";
 import { Meter, Panel, Status } from "@/components/ui";
+import { VerifyCommitment } from "@/components/verify-commitment";
 import { formatSol } from "@/lib/sol-pool";
 
 /**
@@ -611,6 +612,11 @@ export function SolRound({
                     </a>
                   ) : null}
                 </span>
+                {w.status === "accepted" ? (
+                  <div className="w-full">
+                    <VerifyCommitment wagerId={w.id} />
+                  </div>
+                ) : null}
               </li>
             ))}
             {mine.payouts.map((p) => (

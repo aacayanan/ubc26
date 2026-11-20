@@ -2,7 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computePoolOdds, type ModelOdds } from "@/lib/odds";
-import { getRoundStakeSummary } from "@/lib/server/services/scoring/stakes";
+import { getPoolView } from "@/lib/server/services/wagering/pool";
+
+export const LAMPORTS_PER_SOL = 1_000_000_000;
 
 /**
  * The dashboard / round-list feed (F9).
@@ -20,6 +22,8 @@ import { getRoundStakeSummary } from "@/lib/server/services/scoring/stakes";
  * the capacity is raised to the pot when a round outgrows it.
  */
 export const DEFAULT_POOL_CAPACITY = 5000;
+/** Display scale for the open-round SOL pool meter, in SOL. */
+export const DEFAULT_SOL_POOL_CAPACITY = 5;
 
 export interface ActiveCompetition {
   id: string;
@@ -28,11 +32,11 @@ export interface ActiveCompetition {
   models: string[];
   deadline: string;
   status: "OPEN";
-  /** The live pot: every conformance stake on the round so far (F18). */
-  potentialPoints: number;
-  /** Display scale for the pot meter; never below the pot. */
+  /** The live pot in Devnet SOL: every accepted wager so far. */
+  poolSol: number;
+  /** Display scale for the pot meter, in SOL; never below the pot. */
   poolCapacity: number;
-  /** Per-model standings, for live odds (F9). */
+  /** Per-model standings, for live odds (F9). `staked` is in lamports. */
   odds: ModelOdds[];
 }
 
@@ -123,11 +127,13 @@ export async function getActiveCompetitions(
         )
         .map((model) => ({ id: model.id, name: model.name }));
 
-      const summary = await getRoundStakeSummary(competition.id, supabase);
-      const odds = computePoolOdds({
-        models,
-        stakesByModel: summary.stakesByModel,
-      });
+      const pool = await getPoolView(competition.id, supabase);
+      const stakesByModel: Record<string, number> = {};
+      for (const model of pool.models) {
+        stakesByModel[model.modelId] = Number(model.stakedLamports);
+      }
+      const odds = computePoolOdds({ models, stakesByModel });
+      const poolSol = Number(pool.grossLamports) / LAMPORTS_PER_SOL;
 
       const entry: ActiveCompetition = {
         id: competition.id,
@@ -136,8 +142,8 @@ export async function getActiveCompetitions(
         models: models.map((model) => model.name),
         deadline: competition.prediction_deadline,
         status: "OPEN",
-        potentialPoints: odds.pot,
-        poolCapacity: Math.max(DEFAULT_POOL_CAPACITY, odds.pot),
+        poolSol,
+        poolCapacity: Math.max(DEFAULT_SOL_POOL_CAPACITY, poolSol),
         odds: odds.models,
       };
 

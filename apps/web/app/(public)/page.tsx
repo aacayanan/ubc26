@@ -82,8 +82,9 @@ export default function Home() {
 
           <p className="t-body mx-auto mt-8 max-w-[52ch] text-[1.0625rem] text-muted">
             Three language models write the same creative brief and render it
-            live — code streaming in, the artifact taking shape. Stake your
-            points before the clock stops, then vote on which result is best.
+            live — code streaming in, the artifact taking shape. Predict with
+            Devnet SOL before the clock stops, then vote on which result is
+            best.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -339,8 +340,8 @@ export default function Home() {
                 <p className="t-body mt-3 text-sm text-muted">
                   At the deadline the round locks. Three renders stream in, the
                   checks and the judge rule on conformance, and the vote opens.
-                  The points pool splits pro-rata among everyone who staked on
-                  the model that conformed.
+                  The Devnet SOL pool splits pro-rata among everyone who wagered
+                  on the model that conformed.
                 </p>
               </div>
               <div className="mt-8 flex items-center gap-3 border-t border-hairline pt-4">

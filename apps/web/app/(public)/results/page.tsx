@@ -20,7 +20,7 @@ interface ResultEntry {
   display_state: ResultDisplayState;
   conformed_model: string | null;
   crowd_model: string | null;
-  pool_points: number;
+  pool_sol: number;
   reason: string;
   settled_at: string;
 }
@@ -187,9 +187,11 @@ export default function ResultsPage() {
                           Pool
                         </span>
                         <span className="t-num text-[0.8125rem] text-ink">
-                          {r.pool_points.toLocaleString()}
+                          {r.pool_sol.toLocaleString(undefined, {
+                            maximumFractionDigits: 3,
+                          })}
                           <span className="ml-1 text-[0.625rem] text-faint">
-                            pts
+                            SOL
                           </span>
                         </span>
                       </span>

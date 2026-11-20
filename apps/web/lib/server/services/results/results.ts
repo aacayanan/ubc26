@@ -19,8 +19,7 @@ import {
   listJudgeVerdicts,
   type StoredJudgeVerdict,
 } from "@/lib/server/services/pipeline/pipeline-persist";
-import { FAN_FAVORITE_AWARD_POINTS } from "@/lib/server/services/scoring/parimutuel";
-import { getRoundStakeSummary } from "@/lib/server/services/scoring/stakes";
+import { getPoolView } from "@/lib/server/services/wagering/pool";
 import { getCrowdVote } from "@/lib/server/services/scoring/votes";
 import { computePoolOdds } from "@/lib/odds";
 import { resolveDisplayState } from "@/lib/server/services/results/display";
@@ -88,7 +87,7 @@ export async function listSettledRounds(
     rows.map(async (row): Promise<ResultSummary> => {
       const challenge = single(row.challenges);
       const outcome = single(row.round_outcomes);
-      const { potPoints } = await getRoundStakeSummary(row.id, supabase);
+      const { potSol } = await readSolPool(row.id, supabase);
 
       if (!outcome) {
         // A CANCELLED/FAILED round that reached a displayable status without an
@@ -105,7 +104,7 @@ export async function listSettledRounds(
           }),
           conformedModel: null,
           crowdModel: null,
-          poolPoints: potPoints,
+          poolSol: potSol,
           reason: "This round did not produce a result.",
           settledAt: row.settled_at ?? row.updated_at,
         };
@@ -113,8 +112,7 @@ export async function listSettledRounds(
 
       // A voided round has no `settled_at` (transition_round stamps it only on
       // SETTLED), so the outcome's write time is the honest settlement moment.
-      const settledAt =
-        row.settled_at ?? outcome.created_at ?? row.updated_at;
+      const settledAt = row.settled_at ?? outcome.created_at ?? row.updated_at;
 
       return {
         roundId: row.id,
@@ -137,7 +135,7 @@ export async function listSettledRounds(
         crowdModel: outcome.fan_favorite_model_id
           ? (names.get(outcome.fan_favorite_model_id) ?? null)
           : null,
-        poolPoints: potPoints,
+        poolSol: potSol,
         reason: outcome.reason,
         settledAt,
       };
@@ -180,7 +178,7 @@ export async function getRoundResult(
     getBriefById(round.challenge_id, supabase),
     getRoundOutcome(roundId, supabase),
     listJudgeVerdicts(roundId, supabase),
-    getRoundStakeSummary(roundId, supabase),
+    readSolPool(roundId, supabase),
     getCrowdVote(roundId, supabase),
   ]);
 
@@ -203,7 +201,7 @@ export async function getRoundResult(
 
   const odds = computePoolOdds({
     models: participants.map((p) => ({ id: p.modelId, name: p.name })),
-    stakesByModel: stakeSummary.stakesByModel,
+    stakesByModel: stakeSummary.lamportsByModel,
   });
   const oddsByModel = new Map(odds.models.map((o) => [o.modelId, o]));
 
@@ -270,7 +268,7 @@ export async function getRoundResult(
           : null,
         frames: artifact?.frames ?? [],
         solutionCode,
-        staked: modelOdds?.staked ?? 0,
+        staked: (modelOdds?.staked ?? 0) / LAMPORTS_PER_SOL,
         multiplier: modelOdds?.multiplier ?? null,
         share: modelOdds?.share ?? 0,
         isWinner: outcome?.winnerModelId === participant.modelId,
@@ -322,18 +320,16 @@ export async function getRoundResult(
         }
       : null,
     pool: {
-      potPoints: stakeSummary.potPoints,
+      potSol: stakeSummary.potSol,
       models: odds.models.map((model) => ({
         modelId: model.modelId,
         name: model.modelName,
-        staked: model.staked,
+        staked: model.staked / LAMPORTS_PER_SOL,
         multiplier: model.multiplier,
         share: model.share,
       })),
     },
-    crowd: crowd
-      ? { counts: crowd.tally.counts, awardPoints: FAN_FAVORITE_AWARD_POINTS }
-      : null,
+    crowd: crowd ? { counts: crowd.tally.counts } : null,
     models,
     viewerStake,
   };
@@ -351,7 +347,11 @@ async function readModelArtifact(
   modelId: string,
   supabase: SupabaseClient,
 ) {
-  const executionId = await findGenerationExecutionId(roundId, modelId, supabase);
+  const executionId = await findGenerationExecutionId(
+    roundId,
+    modelId,
+    supabase,
+  );
   if (!executionId) return null;
   return getRenderedArtifact(executionId);
 }
@@ -365,7 +365,11 @@ async function readModelSource(
   modelId: string,
   supabase: SupabaseClient,
 ): Promise<string | null> {
-  const executionId = await findGenerationExecutionId(roundId, modelId, supabase);
+  const executionId = await findGenerationExecutionId(
+    roundId,
+    modelId,
+    supabase,
+  );
   if (!executionId) return null;
 
   const { data } = await supabase
@@ -406,40 +410,73 @@ async function findGenerationExecutionId(
   return (data as { id: string } | null)?.id ?? null;
 }
 
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
+/** The round's Devnet SOL pool: gross SOL and lamports per model. */
+async function readSolPool(
+  roundId: string,
+  supabase: SupabaseClient,
+): Promise<{ potSol: number; lamportsByModel: Record<string, number> }> {
+  const pool = await getPoolView(roundId, supabase);
+  const lamportsByModel: Record<string, number> = {};
+  for (const model of pool.models) {
+    lamportsByModel[model.modelId] = Number(model.stakedLamports);
+  }
+  return {
+    potSol: Number(pool.grossLamports) / LAMPORTS_PER_SOL,
+    lamportsByModel,
+  };
+}
+
+/**
+ * The viewer's accepted wagers on this round, summed. A user can hold an ante
+ * plus live wagers; the pick shown is the model carrying the most SOL.
+ */
 async function readViewerStake(
   roundId: string,
   viewerId: string,
   supabase: SupabaseClient,
 ): Promise<RoundResult["viewerStake"]> {
   const { data, error } = await supabase
-    .from("predictions")
-    .select("model_id, stake_points, settlement_outcome, points_awarded")
+    .from("wagers")
+    .select("model_id, lamports, settlement_outcome, payout_lamports")
     .eq("round_id", roundId)
     .eq("user_id", viewerId)
-    .eq("category", "conformance")
-    .maybeSingle();
+    .eq("status", "accepted");
 
   if (error) {
-    throw new InternalError("Failed to read your stake", error);
+    throw new InternalError("Failed to read your wagers", error);
   }
-  if (!data) return null;
-
-  const row = data as {
+  const rows = (data ?? []) as Array<{
     model_id: string;
-    stake_points: number | null;
+    lamports: number | string;
     settlement_outcome: string | null;
-    points_awarded: number | null;
-  };
+    payout_lamports: number | string | null;
+  }>;
+  if (rows.length === 0) return null;
+
+  const byModel = new Map<string, number>();
+  let lamports = 0;
+  let payout = 0;
+  let settled = true;
+  let anyWon = false;
+  let allRefunded = true;
+  for (const row of rows) {
+    const amount = Number(row.lamports);
+    lamports += amount;
+    byModel.set(row.model_id, (byModel.get(row.model_id) ?? 0) + amount);
+    if (row.settlement_outcome === null) settled = false;
+    if (row.settlement_outcome === "won") anyWon = true;
+    if (row.settlement_outcome !== "refunded") allRefunded = false;
+    payout += Number(row.payout_lamports ?? 0);
+  }
+  const modelId = [...byModel.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
   return {
-    modelId: row.model_id,
-    points: row.stake_points ?? 0,
-    outcome:
-      row.settlement_outcome === "won" ||
-      row.settlement_outcome === "lost" ||
-      row.settlement_outcome === "void"
-        ? row.settlement_outcome
-        : null,
-    awarded: row.points_awarded,
+    modelId,
+    amountSol: lamports / LAMPORTS_PER_SOL,
+    outcome: !settled ? null : allRefunded ? "void" : anyWon ? "won" : "lost",
+    payoutSol: settled ? payout / LAMPORTS_PER_SOL : null,
   };
 }
 

@@ -10,10 +10,8 @@ interface LeaderboardEntry {
   tied: boolean;
   display_name: string;
   pseudonymous: boolean;
-  points: number;
-  settled_rounds: number;
-  streak: number | null;
-  hit_rate: number | null;
+  correct_predictions: number;
+  decided_predictions: number;
   is_viewer: boolean;
   outside_top: boolean;
 }
@@ -21,7 +19,6 @@ interface LeaderboardEntry {
 interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   total_ranked: number;
-  pending: { streaks: boolean; hit_rate: boolean };
 }
 
 // Dot tone by rank (not row index), so accounts tied for a podium rank share it.
@@ -32,14 +29,6 @@ const rankTone: Record<number, string> = {
 };
 
 const headCell = "t-label px-5 py-3.5 text-[0.5625rem] font-normal text-faint";
-
-function Pending() {
-  return (
-    <span className="text-faint" aria-label="Not yet available">
-      —
-    </span>
-  );
-}
 
 export default function LeaderboardPage() {
   const [board, setBoard] = useState<LeaderboardResponse | null>(null);
@@ -72,11 +61,6 @@ export default function LeaderboardPage() {
     };
   }, []);
 
-  const pendingNote =
-    board && (board.pending.streaks || board.pending.hit_rate)
-      ? "Streaks and prediction hit rate appear once round settlement publishes them."
-      : null;
-
   return (
     <div className="shell py-14 sm:py-16">
       <PageHeader title="Leaderboard" />
@@ -97,23 +81,24 @@ export default function LeaderboardPage() {
           </Panel>
         ) : board.entries.length === 0 ? (
           <EmptyState
-            title="No one has scored yet."
+            title="No prediction has settled yet."
             action={
               <Link href="/competitions" className="btn btn-ghost btn-sm">
                 Browse open rounds
               </Link>
             }
           >
-            Rankings populate the first time a round settles and its pool is
-            split. Until then every account sits on zero.
+            Rankings populate the first time a round settles and its predictions
+            are marked correct or incorrect.
           </EmptyState>
         ) : (
           <>
             <Panel className="overflow-x-auto">
               <table className="w-full text-sm">
                 <caption className="sr-only">
-                  Accounts ranked by points balance. Rounds counts settled
-                  rounds. Accounts on equal points share a rank.
+                  Accounts ranked by correct predictions. Predictions counts
+                  settled predictions. Accounts with equal correct predictions
+                  share a rank.
                 </caption>
                 <thead>
                   <tr className="border-b border-hairline">
@@ -124,25 +109,13 @@ export default function LeaderboardPage() {
                       Account
                     </th>
                     <th scope="col" className={`${headCell} text-right`}>
-                      Points
+                      Correct
                     </th>
                     <th
                       scope="col"
                       className={`${headCell} hidden text-right sm:table-cell`}
                     >
-                      Rounds
-                    </th>
-                    <th
-                      scope="col"
-                      className={`${headCell} hidden text-right sm:table-cell`}
-                    >
-                      Streak
-                    </th>
-                    <th
-                      scope="col"
-                      className={`${headCell} hidden text-right md:table-cell`}
-                    >
-                      Hit rate
+                      Predictions
                     </th>
                   </tr>
                 </thead>
@@ -191,20 +164,10 @@ export default function LeaderboardPage() {
                         </span>
                       </td>
                       <td className="t-num px-5 py-4 text-right text-ink">
-                        {entry.points.toLocaleString()}
+                        {entry.correct_predictions.toLocaleString()}
                       </td>
                       <td className="t-num hidden px-5 py-4 text-right text-muted sm:table-cell">
-                        {entry.settled_rounds}
-                      </td>
-                      <td className="t-num hidden px-5 py-4 text-right text-muted sm:table-cell">
-                        {entry.streak === null ? <Pending /> : entry.streak}
-                      </td>
-                      <td className="t-num hidden px-5 py-4 text-right text-muted md:table-cell">
-                        {entry.hit_rate === null ? (
-                          <Pending />
-                        ) : (
-                          `${Math.round(entry.hit_rate * 100)}%`
-                        )}
+                        {entry.decided_predictions.toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -214,16 +177,12 @@ export default function LeaderboardPage() {
 
             <div className="mt-4 flex flex-wrap justify-between gap-x-6 gap-y-2">
               <p className="t-mono text-[0.625rem] text-faint">
-                Ranked by points balance. Equal points share a rank (=).
+                Ranked by correct predictions. Equal counts share a rank (=).
+                Refunded wagers do not count.
                 {board.total_ranked > board.entries.length
                   ? ` Showing top of ${board.total_ranked.toLocaleString()} ranked accounts.`
                   : null}
               </p>
-              {pendingNote ? (
-                <p className="t-mono text-[0.625rem] text-faint">
-                  {pendingNote}
-                </p>
-              ) : null}
             </div>
           </>
         )}

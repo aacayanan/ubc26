@@ -1,4 +1,5 @@
 import { withApiErrorHandling } from "@/lib/server/http/api-error";
+import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
 import {
   LEADERBOARD_LIMIT,
   getLeaderboard,
@@ -6,7 +7,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Public read. The response carries only sanitized display names, opaque
-// keys and settled totals — no user ids, emails, wallets or roles.
+// keys and prediction tallies — no user ids, emails, wallets or roles.
 export async function GET(request: Request) {
   return withApiErrorHandling(request, async () => {
     const supabase = await createSupabaseServerClient();
@@ -14,7 +15,12 @@ export async function GET(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const leaderboard = await getLeaderboard(supabase, user?.id ?? null);
+    // Wagers are owner-only under RLS, so tallies are read with the service
+    // role; nothing but counts and sanitized names is returned.
+    const leaderboard = await getLeaderboard(
+      getServiceRoleSupabase(),
+      user?.id ?? null,
+    );
 
     return Response.json(
       {
@@ -24,19 +30,13 @@ export async function GET(request: Request) {
           tied: entry.tied,
           display_name: entry.displayName,
           pseudonymous: entry.pseudonymous,
-          points: entry.points,
-          settled_rounds: entry.settledRounds,
-          streak: entry.streak,
-          hit_rate: entry.hitRate,
+          correct_predictions: entry.correctPredictions,
+          decided_predictions: entry.decidedPredictions,
           is_viewer: entry.isViewer,
           // The viewer's own row, appended after the top list.
           outside_top: index >= LEADERBOARD_LIMIT,
         })),
         total_ranked: leaderboard.totalRanked,
-        pending: {
-          streaks: leaderboard.pending.streaks,
-          hit_rate: leaderboard.pending.hitRate,
-        },
       },
       { headers: { "cache-control": "no-store" } },
     );

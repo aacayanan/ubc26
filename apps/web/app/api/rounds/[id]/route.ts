@@ -40,14 +40,6 @@ export async function GET(
           brief_text: round.briefText,
           models: round.models,
           deadline: round.predictionDeadline,
-          pool_points: round.poolPoints,
-          pool_capacity: round.poolCapacity,
-          user_stake: round.viewerStake
-            ? {
-                model_id: round.viewerStake.modelId,
-                points: round.viewerStake.points,
-              }
-            : null,
         },
       },
       { headers: { "cache-control": "no-store" } },

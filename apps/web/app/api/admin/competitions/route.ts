@@ -13,7 +13,7 @@ interface CreateCompetitionBody {
   challengeId?: unknown;
   modelIds?: unknown;
   predictionDeadline?: unknown;
-  /** "devnet_sol" creates a SOL-wagering round (Devnet only); default points. */
+  /** Optional; every round is "devnet_sol". The points pool is retired. */
   wageringMode?: unknown;
   feeBps?: unknown;
   stallTimeoutSeconds?: unknown;
@@ -74,14 +74,32 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseAdminClient();
 
-    if (body.wageringMode === "devnet_sol") {
+    if (body.wageringMode !== undefined && body.wageringMode !== "devnet_sol") {
+      throw new ValidationError(
+        "Points rounds are retired; every round wagers Devnet SOL",
+      );
+    }
+
+    {
       const feeBps = body.feeBps === undefined ? 500 : body.feeBps;
-      if (typeof feeBps !== "number" || !Number.isInteger(feeBps) || feeBps < 0 || feeBps > 2000) {
-        throw new ValidationError("feeBps must be an integer between 0 and 2000");
+      if (
+        typeof feeBps !== "number" ||
+        !Number.isInteger(feeBps) ||
+        feeBps < 0 ||
+        feeBps > 2000
+      ) {
+        throw new ValidationError(
+          "feeBps must be an integer between 0 and 2000",
+        );
       }
       const stall = body.stallTimeoutSeconds ?? null;
-      if (stall !== null && (typeof stall !== "number" || !Number.isInteger(stall) || stall <= 0)) {
-        throw new ValidationError("stallTimeoutSeconds must be a positive integer or null");
+      if (
+        stall !== null &&
+        (typeof stall !== "number" || !Number.isInteger(stall) || stall <= 0)
+      ) {
+        throw new ValidationError(
+          "stallTimeoutSeconds must be a positive integer or null",
+        );
       }
       const policy = getChunkPolicy();
       const budget = policy.maxChunks * policy.maxTokensPerChunk;
@@ -120,20 +138,5 @@ export async function POST(request: Request) {
 
       return Response.json({ competition: data });
     }
-
-    const { data, error } = await supabase.rpc("create_competition", {
-      p_slug: name.trim(),
-      p_challenge_id: body.challengeId,
-      p_model_ids: body.modelIds,
-      p_prediction_opens_at: new Date().toISOString(),
-      p_prediction_deadline: deadline.toISOString(),
-      p_created_by: admin.id,
-    });
-
-    if (error) {
-      throw new ValidationError(error.message);
-    }
-
-    return Response.json({ competition: data });
   });
 }

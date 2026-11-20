@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       models: competition.models,
       deadline: competition.deadline,
       status: competition.status,
-      potential_points: competition.potentialPoints,
+      pool_sol: competition.poolSol,
       pool_capacity: competition.poolCapacity,
       odds: competition.odds.map((model) => ({
         model_id: model.modelId,

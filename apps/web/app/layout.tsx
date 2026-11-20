@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s — AI Showdown",
   },
   description:
-    "Watch three language models write the same creative brief and render it live. Stake your points before the deadline, then vote on which result is best. Points only — no real money.",
+    "Watch three language models write the same creative brief and render it live. Predict with Devnet SOL before the deadline, then vote on which result is best. Devnet test SOL only — no real money.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

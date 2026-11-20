@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { needsAccountSetup } from "@/lib/auth/wallet-account";
 
 const PROTECTED = [
   "/admin",
@@ -7,6 +8,7 @@ const PROTECTED = [
   "/predictions",
   "/profile",
   "/link-wallet",
+  "/create-account",
 ];
 
 export async function proxy(request: NextRequest) {
@@ -46,6 +48,20 @@ export async function proxy(request: NextRequest) {
   const isProtected = PROTECTED.some(
     (p) => path === p || path.startsWith(`${p}/`),
   );
+
+  // A Phantom sign-up finishes by choosing a username and password; until it
+  // has, every signed-in page sends it to /create-account.
+  const setupPending = needsAccountSetup(user);
+  if (
+    setupPending &&
+    (isProtected || path === "/login") &&
+    path !== "/create-account"
+  ) {
+    return NextResponse.redirect(new URL("/create-account", request.url));
+  }
+  if (user && !setupPending && path === "/create-account") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
 
   if (user && path === "/login") {
     return NextResponse.redirect(new URL("/dashboard", request.url));

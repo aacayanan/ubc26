@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
 import { SolRound } from "@/components/sol-round";
 import { LiveRoundPanel } from "@/components/live-round-panel";
-import { MarketBoard } from "@/components/market-board";
 import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
@@ -25,16 +24,12 @@ interface RoundDetail {
   deadline: string;
   /** Lifecycle status; the component reads it as `state`. */
   state: string;
-  pool_points: number;
-  pool_capacity: number;
-  user_stake: { model_id: string; points: number } | null;
 }
 
 /** What `GET /api/rounds/[id]` returns: `status`, not `state`. */
 type ApiRound = Omit<RoundDetail, "state"> & { status: string };
 
 export default function CompetitionDetailPage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const roundId = params?.id;
 
@@ -108,53 +103,6 @@ export default function CompetitionDetailPage() {
     };
   }, [roundId]);
 
-  // SOL rounds (Devnet prototype) render the wagering view instead of the
-  // points stake form. Read from the pool endpoint, which every round has.
-  const [solMode, setSolMode] = useState(false);
-  useEffect(() => {
-    if (!roundId) return;
-    let active = true;
-    fetch(`/api/rounds/${roundId}/pool`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body) => {
-        if (active) setSolMode(body?.pool?.wageringMode === "devnet_sol");
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [roundId, reloadKey]);
-
-  const [selected, setSelected] = useState<string>("");
-  const [stake, setStake] = useState<string>("250");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!round) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/rounds/${round.id}/stakes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: selected, points: Number(stake) }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.message ?? "Could not place the stake");
-      }
-      router.push("/predictions");
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Could not place the stake",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="shell py-14 sm:py-20">
@@ -222,32 +170,14 @@ export default function CompetitionDetailPage() {
     );
   }
 
-  // Actionable means OPEN *and* inside the clock. `place_stake` rejects a
-  // post-deadline stake anyway, but offering the form would promise something
-  // the server will refuse — F11 can lag a round's deadline by a job interval.
+  // Actionable means OPEN *and* inside the clock — F11 can lag a round's
+  // deadline by a job interval.
   const deadline = describeDeadline(round.deadline);
   const isOpen = round.state === "OPEN" && !deadline.expired;
-  const staked = round.user_stake !== null;
 
-  // The stake's ceiling is a display convenience (the ledger is the real limit);
-  // the slider needs a max, and 1,000 is a round number a person can reason about.
-  // The floor mirrors `MIN_STAKE_POINTS` in the stakes service, which is
-  // `server-only` and cannot be imported into this client component.
-  const MIN_STAKE = 10;
-  const MAX_STAKE = 1000;
-  const selectedModel = round.models.find((m) => m.id === selected) ?? null;
-  const sliderValue = Math.max(
-    MIN_STAKE,
-    Math.min(MAX_STAKE, Number(stake) || MIN_STAKE),
-  );
-  const sliderFill = Math.round(
-    ((sliderValue - MIN_STAKE) / (MAX_STAKE - MIN_STAKE)) * 100,
-  );
-
-  // Two clocks, two layouts. While staking is open the page is a market: title,
-  // brief and the pool. Once the round locks the page is the show — the renders
-  // take the page's full width and the pool becomes a dock that follows the
-  // scroll, because the crowd reads prices while watching, not after.
+  // Two clocks, two layouts. While the ante is open the page leads with the
+  // brief; once the round locks it is the show — a compact masthead, then the
+  // live wager panel and the renders at the page's full width.
   const isLive = !isOpen;
 
   // What the round is doing, in one line. The live page has no room for the old
@@ -259,9 +189,9 @@ export default function CompetitionDetailPage() {
       : round.state === "SETTLED" || round.state === "ARCHIVED"
         ? "Its conformance result and the crowd's choice are recorded in Results."
         : round.state === "VOIDED"
-          ? "No model conformed to the brief, so no points moved. Every stake was returned."
+          ? "No model conformed to the brief, so every wager is refunded."
           : round.state === "CANCELLED" || round.state === "FAILED"
-            ? "No render ran, so every stake is void and its points return to the pool."
+            ? "No render ran, so the round is void and every wager is refunded."
             : round.state === "RETRYING"
               ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
               : "The round has locked. Renders are being produced, and the crowd vote opens once they land.";
@@ -352,252 +282,24 @@ export default function CompetitionDetailPage() {
         </Panel>
       )}
 
-      {solMode ? (
-        // SOL rounds carry their own wager flow (token meters, ante and live
-        // phases, pool, payouts); the points market board does not apply. The
-        // live show stays shared, so both modes replay the same renders.
-        <>
-          {isLive ? (
-            <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
-              {liveNote}
-            </p>
-          ) : null}
-          <SolRound
-            roundId={round.id}
-            status={round.state}
-            deadline={round.deadline}
-            models={round.models}
-          />
-          <LiveRoundPanel
-            roundId={round.id}
-            initialStatus={round.state}
-            className="mt-5"
-          />
-        </>
-      ) : isLive ? (
-        <>
-          <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
-            {liveNote}
-          </p>
-
-          {/* The show takes the page's full width: three renders side by side is
-              the product's promise, and it only reads when they have the room. */}
-          <LiveRoundPanel
-            roundId={round.id}
-            initialStatus={round.state}
-            className="mt-5"
-          />
-
-          {/* The pool is pinned to the bottom edge: the stakes and payouts stay
-              in view at every scroll position without taking the stage. */}
-          <MarketBoard
-            variant="dock"
-            roundId={round.id}
-            models={round.models}
-            deadline={round.deadline}
-            status={round.state}
-            selectedModelId={null}
-            points={0}
-            onPick={() => {}}
-          />
-        </>
-      ) : (
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-start">
-          <div className="min-w-0 space-y-3">
-            {/* The pool as a live instrument: the price you would buy at, and
-                the three weights it is made of. It is the same control as the
-                stake form — a row here and a row there are one selection. */}
-            <MarketBoard
-              id="market-board"
-              roundId={round.id}
-              models={round.models}
-              deadline={round.deadline}
-              status={round.state}
-              selectedModelId={selected || null}
-              points={Number(stake)}
-              onPick={setSelected}
-            />
-
-            <p className="t-body px-1 text-xs text-faint">
-              Points, not money. Every stake on a round is one pot; when the
-              round settles, it is split pro-rata among the backers of the model
-              that conforms to the brief — and a model nobody backed pays
-              nobody.
-            </p>
-          </div>
-
-          <div className="min-w-0 space-y-3 lg:sticky lg:top-24">
-            {/* This column only exists while staking is open — a locked round
-                renders the live page instead — so the ticket is either a form
-                or the receipt for a stake already sealed. */}
-            <Panel className="p-7">
-              {!staked ? (
-                <form onSubmit={handleSubmit}>
-                  <div className="flex items-center justify-between">
-                    <h2 className="t-title text-[1rem] text-ink">
-                      Seal a stake
-                    </h2>
-                    <span className="t-mono text-[0.625rem] text-faint">
-                      before{" "}
-                      {deadline.text === "Locked" ? "lock" : deadline.text}
-                    </span>
-                  </div>
-
-                  {/* Which side the ticket sits on, echoing the board's
-                      selection. */}
-                  <div className="mt-5">
-                    <p className="t-label text-[0.5625rem] text-faint">
-                      Which model conforms?
-                    </p>
-                    {selectedModel ? (
-                      <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-magenta/45 bg-magenta/[0.06] px-4 py-3">
-                        <span className="flex items-center gap-3">
-                          <span
-                            aria-hidden="true"
-                            className="grid size-[15px] shrink-0 place-items-center rounded-full border border-magenta"
-                          >
-                            <span className="size-[7px] rounded-full bg-magenta" />
-                          </span>
-                          <span className="text-[0.875rem] text-ink">
-                            {selectedModel.name}
-                          </span>
-                        </span>
-                        <span className="t-mono text-[0.625rem] text-faint">
-                          priced above
-                        </span>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          document
-                            .getElementById("market-board")
-                            ?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "center",
-                            })
-                        }
-                        className="mt-2.5 w-full rounded-xl border border-dashed border-[var(--control-line)] px-4 py-3 text-left text-[0.8125rem] text-muted transition-colors hover:border-white/45 hover:text-ink"
-                      >
-                        Pick a side on the pool above to price this stake
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <label
-                        htmlFor="stake"
-                        className="t-label text-[0.5625rem] text-faint"
-                      >
-                        Stake
-                      </label>
-                      <span className="t-mono text-[0.5625rem] text-faint">
-                        range {MIN_STAKE}–{MAX_STAKE.toLocaleString()}
-                      </span>
-                    </div>
-
-                    {/* Slider and field are one control: the slider for feel,
-                        the field for an exact number. */}
-                    <div className="mt-2.5 flex items-center gap-3">
-                      <div className="field flex flex-1 items-center gap-3 py-2">
-                        <input
-                          type="range"
-                          min={MIN_STAKE}
-                          max={MAX_STAKE}
-                          step={10}
-                          value={sliderValue}
-                          onChange={(e) => setStake(e.target.value)}
-                          aria-label="Stake amount"
-                          aria-describedby="stake-hint"
-                          className="stake-range"
-                          style={
-                            {
-                              "--fill": `${sliderFill}%`,
-                            } as React.CSSProperties
-                          }
-                        />
-                        <input
-                          id="stake"
-                          type="number"
-                          min={MIN_STAKE}
-                          step={10}
-                          value={stake}
-                          onChange={(e) => setStake(e.target.value)}
-                          aria-describedby="stake-hint"
-                          className="t-num w-[4.5rem] shrink-0 border-0 bg-transparent text-right text-[0.9375rem] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                      </div>
-                      <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
-                        pts
-                      </span>
-                    </div>
-                    <p
-                      id="stake-hint"
-                      className="t-mono mt-2 text-[0.625rem] text-faint"
-                    >
-                      minimum {MIN_STAKE} points · one stake per round · you can
-                      raise it until the deadline
-                    </p>
-                  </div>
-
-                  {error ? (
-                    <p
-                      role="alert"
-                      className="mt-4 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3 py-2 text-xs text-magenta"
-                    >
-                      {error}
-                    </p>
-                  ) : null}
-
-                  <button
-                    type="submit"
-                    disabled={saving || !selected || Number(stake) < MIN_STAKE}
-                    className="btn btn-solid btn-block mt-6"
-                  >
-                    {saving
-                      ? "Sealing…"
-                      : selectedModel
-                        ? `Seal ${Number(stake).toLocaleString()} on ${selectedModel.name}`
-                        : "Seal this stake"}
-                  </button>
-
-                  <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
-                    committed on devnet as hash(pick, stake, nonce)
-                  </p>
-                </form>
-              ) : (
-                <div className="text-center">
-                  <Status tone="ink">Sealed</Status>
-                  <p className="t-title mt-5 text-lg text-ink">
-                    Your stake is in the pool.
-                  </p>
-                  {round.user_stake ? (
-                    <p className="t-num mt-2 text-[0.8125rem] text-muted">
-                      {round.user_stake.points.toLocaleString()} pts on{" "}
-                      <span className="text-ink">
-                        {round.models.find(
-                          (m) => m.id === round.user_stake?.model_id,
-                        )?.name ?? "a contender"}
-                      </span>
-                    </p>
-                  ) : null}
-                  <p className="t-body mt-2 text-sm text-muted">
-                    It is locked for this round, and settles with the pool once
-                    the round settles.
-                  </p>
-                  <Link
-                    href="/predictions"
-                    className="btn btn-ghost btn-block mt-6"
-                  >
-                    My predictions
-                  </Link>
-                </div>
-              )}
-            </Panel>
-          </div>
-        </div>
-      )}
+      {isLive ? (
+        <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
+          {liveNote}
+        </p>
+      ) : null}
+      {/* Every round is a Devnet SOL round: the wager flow (token meters, ante
+          and live phases, pool, payouts), then the shared live show. */}
+      <SolRound
+        roundId={round.id}
+        status={round.state}
+        deadline={round.deadline}
+        models={round.models}
+      />
+      <LiveRoundPanel
+        roundId={round.id}
+        initialStatus={round.state}
+        className="mt-5"
+      />
     </div>
   );
 }

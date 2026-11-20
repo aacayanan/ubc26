@@ -31,7 +31,7 @@ function fakeSupabase(rows: FakeRow[]) {
 
   const client = {
     from(table: string) {
-      if (table !== "predictions") {
+      if (table !== "wagers") {
         throw new Error(`unexpected table read: ${table}`);
       }
       const chain = {
@@ -55,8 +55,8 @@ function fakeSupabase(rows: FakeRow[]) {
 
 /** One prediction row, shaped as PostgREST returns the nested selects. */
 function row(overrides: {
-  settlement_outcome?: "won" | "lost" | "void" | null;
-  points_awarded?: number | null;
+  settlement_outcome?: "won" | "lost" | "refunded" | null;
+  payout_lamports?: number | null;
   roundStatus?: string;
   roundModels?: unknown[];
 }): FakeRow {
@@ -76,8 +76,8 @@ function row(overrides: {
       id: "stake-1",
       round_id: ROUND_ID,
       model_id: PICKED_MODEL,
-      stake_points: 250,
-      points_awarded: overrides.points_awarded ?? null,
+      lamports: 250_000_000,
+      payout_lamports: overrides.payout_lamports ?? null,
       settlement_outcome: overrides.settlement_outcome ?? null,
       created_at: "2026-11-20T00:00:00Z",
     },
@@ -158,7 +158,7 @@ describe("listUserStakes", () => {
 
       expect(stake.state).toBe("open");
       expect(stake.outcome).toBeNull();
-      expect(stake.awarded).toBeNull();
+      expect(stake.payoutSol).toBeNull();
     });
 
     it("is `locked` before anything rendered", async () => {
@@ -176,26 +176,30 @@ describe("listUserStakes", () => {
       const stake = await stakeFor({ roundStatus: "SETTLED" });
 
       expect(stake.state).toBe("settling");
-      expect(stake.awarded).toBeNull();
+      expect(stake.payoutSol).toBeNull();
     });
   });
 
   describe("outcome", () => {
     it.each([
-      ["won", 480],
-      ["lost", 0],
-      ["void", 0],
-    ] as const)("follows settlement_outcome = %s", async (outcome, awarded) => {
-      const stake = await stakeFor({
-        roundStatus: "SETTLED",
-        settlement_outcome: outcome,
-        points_awarded: awarded,
-      });
+      ["won", "won", 480_000_000, 0.48],
+      ["lost", "lost", 0, 0],
+      ["refunded", "void", 250_000_000, 0.25],
+    ] as const)(
+      "follows settlement_outcome = %s",
+      async (settled, outcome, lamports, sol) => {
+        const stake = await stakeFor({
+          roundStatus: "SETTLED",
+          settlement_outcome: settled,
+          payout_lamports: lamports,
+        });
 
-      expect(stake.state).toBe(outcome);
-      expect(stake.outcome).toBe(outcome);
-      expect(stake.awarded).toBe(awarded);
-    });
+        expect(stake.state).toBe(outcome);
+        expect(stake.outcome).toBe(outcome);
+        expect(stake.payoutSol).toBe(sol);
+        expect(stake.amountSol).toBe(0.25);
+      },
+    );
 
     it.each(["VOIDED", "FAILED", "CANCELLED"])(
       "is `void` when the round ended %s with no settlement row",
@@ -204,7 +208,7 @@ describe("listUserStakes", () => {
 
         expect(stake.state).toBe("void");
         // No payout was recorded, so the record must not invent one.
-        expect(stake.awarded).toBeNull();
+        expect(stake.payoutSol).toBeNull();
       },
     );
   });
