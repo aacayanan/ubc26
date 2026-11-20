@@ -39,12 +39,12 @@ export default function Logo({
     <Link
       href={href}
       className="group flex items-center gap-2.5 text-ink"
-      aria-label="AI Showdown — home"
+      aria-label="Zelto — home"
     >
       <LogoMark className="h-[18px] w-[22px] shrink-0" />
       {showWordmark ? (
         <span className="whitespace-nowrap text-[0.9375rem] font-medium tracking-[-0.015em]">
-          AI Showdown
+          Zelto
         </span>
       ) : null}
     </Link>

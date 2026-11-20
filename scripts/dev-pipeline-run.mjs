@@ -160,26 +160,36 @@ async function pickBrief() {
 async function pickLineup() {
   const { data, error } = await db
     .from("llm_models")
-    .select("id, slug, openrouter_model_id")
+    .select("id, slug, openrouter_model_id, tier")
     .eq("role", "competitor")
     .eq("is_active", true)
-    .order("sort_order")
-    .limit(3);
+    .order("sort_order");
 
   if (error) fail(`Could not read the lineup: ${error.message}`);
 
+  // A round is priced by the tier its models share, so the dev lineup has to
+  // come from one rung — otherwise create_sol_competition refuses it.
   const real = (data ?? []).filter(
-    (model) => !model.openrouter_model_id.startsWith("demo/"),
+    (model) =>
+      !model.openrouter_model_id.startsWith("demo/") && model.tier !== null,
   );
 
-  if (real.length < 2) {
+  const byTier = new Map();
+  for (const model of real) {
+    byTier.set(model.tier, [...(byTier.get(model.tier) ?? []), model]);
+  }
+  const rung = [...byTier.entries()].find(([, models]) => models.length >= 2);
+
+  if (!rung) {
     fail(
-      "Fewer than two real competitor models are active.",
-      "The demo/gpt-style rows are placeholders and will fail at generation.",
+      "No single tier has two real competitor models active.",
+      "Seed the tiered lineup (`npm run db:push --include-seed`) or seat two models on one rung.",
     );
   }
 
-  return real;
+  const [tier, models] = rung;
+  console.log(`Tier:   ${tier} (${models.length} seated)`);
+  return models.slice(0, 3);
 }
 
 async function pickActor() {

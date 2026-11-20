@@ -49,6 +49,8 @@ interface Pool {
   bettingCloseModelId: string | null;
   feeBps: number;
   anteUsdCents: number;
+  tier: string | null;
+  tierLabel: string | null;
   cutoffBps: number;
   tokenBudgetPerModel: number | null;
   treasuryAddress: string | null;
@@ -147,6 +149,11 @@ async function connectPhantom(): Promise<string> {
   return result.publicKey.toBase58();
 }
 
+/** Lamports as SOL, rounded up to 4 decimals so it always clears the minimum. */
+function minimumSol(lamports: string): string {
+  return (Math.ceil(Number(lamports) / 100_000) / 10_000).toFixed(4);
+}
+
 export function SolRound({
   roundId,
   status,
@@ -161,7 +168,13 @@ export function SolRound({
   const [pool, setPool] = useState<Pool | null>(null);
   const [mine, setMine] = useState<Mine | null>(null);
   const [selected, setSelected] = useState("");
-  const [amount, setAmount] = useState("0.01");
+  const [amount, setAmount] = useState("");
+  // The $3 live minimum in lamports at the current reference price (advisory;
+  // the server re-checks it when the wager is prepared).
+  const [liveMinimum, setLiveMinimum] = useState<{
+    usdCents: number;
+    lamports: string;
+  } | null>(null);
   const [step, setStep] = useState<Step>({ kind: "idle" });
   const [wallet, setWallet] = useState<string | null>(null);
   // Wall-clock read in the poll tick, never during render.
@@ -184,9 +197,11 @@ export function SolRound({
       const body = (await poolResponse.json()) as {
         pool: Pool;
         mine: Mine | null;
+        liveMinimum?: { usdCents: number; lamports: string } | null;
       };
       setPool(body.pool);
       setMine(body.mine);
+      setLiveMinimum(body.liveMinimum ?? null);
       setSamples((previous) =>
         appendPriceSample(previous, body.pool as BoardPool, models),
       );
@@ -224,6 +239,12 @@ export function SolRound({
     phase === "live" && status !== "SETTLED" && status !== "VOIDED";
   const canAnte = anteOpen && !acceptedAnte && mine?.canWager;
   const canLive = liveOpen && Boolean(acceptedAnte) && mine?.canWager;
+  // The buy-in comes from the round's tier, never a constant: a $2 cheap round
+  // and a $10 exclusive round differ only in this number.
+  const anteLabel =
+    pool?.anteUsdCents === undefined
+      ? "tier-priced"
+      : `$${(pool.anteUsdCents / 100).toFixed(2)}`;
 
   async function placeWager(kind: "ante" | "live") {
     if (!selected) return;
@@ -235,7 +256,9 @@ export function SolRound({
       setStep({
         kind: "working",
         label:
-          kind === "ante" ? "Pricing the $5 ante…" : "Preparing the wager…",
+          kind === "ante"
+            ? `Pricing the ${anteLabel} ante…`
+            : "Preparing the wager…",
       });
       const prepareResponse = await fetch(
         `/api/rounds/${roundId}/wagers/prepare`,
@@ -245,7 +268,12 @@ export function SolRound({
           body: JSON.stringify({
             modelId: selected,
             kind,
-            sol: kind === "live" ? amount : undefined,
+            // A blank amount bets the current $3 minimum.
+            sol:
+              kind === "live"
+                ? amount.trim() ||
+                  (liveMinimum ? minimumSol(liveMinimum.lamports) : "")
+                : undefined,
             wallet: address,
           }),
         },
@@ -323,12 +351,6 @@ export function SolRound({
   const busy = step.kind === "working";
   const budget = pool?.tokenBudgetPerModel ?? null;
   const cutoff = (pool?.cutoffBps ?? 7500) / 10_000;
-  // What this account already has in the pool: the ante plus any accepted live
-  // wagers. The board uses it to price the draft as an addition and to enforce
-  // the round's 1 SOL ceiling before a signature is wasted.
-  const alreadyStaked = (mine?.wagers ?? [])
-    .filter((w) => w.status === "accepted")
-    .reduce((total, w) => total + lamports(w.lamports), BigInt(0));
 
   // The statistics grid exists only while the round is still open. The moment
   // it locks, every tile disappears and the page is the live show — the market
@@ -408,8 +430,13 @@ export function SolRound({
           "Live betting open") is gone: the sentence below states the phase in
           full, and the board's own ticket says what to do about it. */}
       <Panel className="p-7">
-        {anteOpen ? (
-          <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {pool?.tierLabel ? (
+            <span className="t-mono text-[0.6875rem] text-faint">
+              {pool.tierLabel} tier · {anteLabel} buy-in
+            </span>
+          ) : null}
+          {anteOpen ? (
             <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
               <span className="text-faint">ante closes in</span>
               <CountdownReadout
@@ -417,11 +444,11 @@ export function SolRound({
                 className="t-num text-ink"
               />
             </span>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
         <p className="t-body mt-4 text-sm text-muted">
           {phase === "ante" && anteOpen
-            ? "Place the $5-equivalent ante in Devnet SOL to join this round. Live betting opens when generation starts."
+            ? `Place the ${anteLabel}-equivalent ante in Devnet SOL to join this round. Live betting opens when generation starts.`
             : phase === "ante"
               ? "The ante window closed with the deadline. Live betting opens the moment generation starts."
               : phase === "live"
@@ -454,7 +481,14 @@ export function SolRound({
           amount={amount}
           onAmount={setAmount}
           samples={samples}
-          alreadyStaked={alreadyStaked}
+          minimum={
+            liveMinimum
+              ? {
+                  usdCents: liveMinimum.usdCents,
+                  sol: minimumSol(liveMinimum.lamports),
+                }
+              : null
+          }
           drafting={Boolean(canLive)}
           ante={Boolean(canAnte)}
           busy={busy || confirming}
@@ -471,7 +505,7 @@ export function SolRound({
           }
           anteNote={
             canAnte
-              ? `${((pool.anteUsdCents ?? 500) / 100).toFixed(2)} USD in Devnet SOL at the current SOL/USD reference price`
+              ? `${anteLabel} in Devnet SOL at the current SOL/USD reference price`
               : undefined
           }
         />

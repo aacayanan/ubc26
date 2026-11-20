@@ -154,8 +154,9 @@ export default function LinkWalletStep({
             Link your Solana wallet
           </h1>
           <p className="t-body mt-2.5 text-sm text-muted">
-            Linking lets you stake on live rounds and verify your predictions
-            on-chain. You can skip this and explore in practice mode first.
+            Linking lets you make predictions and verify them on Solana Devnet.
+            You never need a wallet to browse, watch or vote, so you can skip
+            this and explore in practice mode first.
           </p>
         </div>
 

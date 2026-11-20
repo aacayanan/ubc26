@@ -18,6 +18,7 @@
     "sandbox:check": "node --test scripts/sandbox-persistence-check.mjs",
     "sandbox:render:build": "docker build -t ai-showdown-render:chromium sandbox/render/",
     "briefs:validate": "node scripts/briefs-validate.mjs",
+    "tier:validate": "npm exec --workspace=web -- tsx --conditions=react-server --env-file=.env.local --tsconfig tsconfig.json ../../scripts/validate-tier-models.ts",
     "dev:pipeline": "node scripts/dev-pipeline-run.mjs",
     "round:settle": "node scripts/settle-round.mjs",
     "db:link": "supabase link",

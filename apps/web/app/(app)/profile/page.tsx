@@ -123,8 +123,8 @@ export default async function ProfilePage() {
           <Panel className="mt-4 p-6">
             <p className="t-body text-sm text-muted">
               {profile.funded
-                ? "A Solana wallet is linked to this account. Stakes are sealed against it before every deadline."
-                : "Link a Solana wallet to stake on live rounds and verify your prediction commitments on-chain. You can keep browsing and voting without one."}
+                ? "A Solana wallet is linked to this account. You sign each prediction with it, and each one is recorded on Solana Devnet."
+                : "Link a Solana wallet to make predictions and verify them on Solana Devnet. You never need one to browse, watch or vote."}
             </p>
             <Link
               href="/link-wallet"

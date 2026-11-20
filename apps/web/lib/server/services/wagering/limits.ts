@@ -4,9 +4,11 @@
  * and for the UI.
  */
 export const WAGER_LIMITS = {
-  minLiveLamports: BigInt(5_000_000), // 0.005 SOL
-  maxLiveLamports: BigInt(250_000_000), // 0.25 SOL
+  // After the $5 ante, each live wager must be worth at least $3 in SOL at
+  // the reference price. Checked at prepare (the database has no price); the
+  // signed transaction must equal the prepared one, so the amount cannot
+  // change afterwards. There is no maximum per wager or per round.
+  minLiveUsdCents: 300,
   maxLiveWagersPerRound: 10,
-  maxLamportsPerRound: BigInt(1_000_000_000), // 1 SOL, ante included
   maxPreparedPerMinute: 5,
 } as const;

@@ -39,13 +39,6 @@ import { formatSol, parseSolToLamports } from "@/lib/sol-pool";
  *     projection is additive, not a replacement.
  */
 
-/** Devnet wager window. `public.sol_wager_limits()` is authoritative. */
-const MIN_SOL = 0.005;
-const MAX_SOL = 0.25;
-const CAP_SOL = 1;
-
-const PRESETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25] as const;
-
 const MAX_SAMPLES = 64;
 
 export interface BoardModel {
@@ -74,9 +67,10 @@ export function SolMarketBoard({
   onSelect,
   amount,
   onAmount,
-  /** Lamports this account already has in the round, ante included. */
+  /** Observed price readings; the parent records one per poll. */
   samples,
-  alreadyStaked,
+  /** The $3 live floor in SOL at the reference price, from the pool API. */
+  minimum,
   drafting,
   ante = false,
   busy,
@@ -95,10 +89,11 @@ export function SolMarketBoard({
   onAmount: (value: string) => void;
   /** Observed price readings; the parent records one per poll. */
   samples: ReadonlyArray<PriceSample>;
-  alreadyStaked: bigint;
-  /** True when a live wager ticket (slider) should be shown. */
+  /** The $3 live floor in SOL at the reference price (pool API), for the hint. */
+  minimum: { usdCents: number; sol: string } | null;
+  /** True when a live wager ticket should be shown. */
   drafting: boolean;
-  /** True when the ticket is the fixed $5 ante instead of a slider. */
+  /** True when the ticket is the fixed tier-priced ante instead of a live one. */
   ante?: boolean;
   busy: boolean;
   /** What the button says while a signature is in flight. */
@@ -111,30 +106,17 @@ export function SolMarketBoard({
 }) {
   const closed = pool.bettingPhase === "closed";
 
-  // Remaining budget for this round, capped by the per-wager maximum. The ante
-  // counts against the round cap, so a bettor who already placed one sees the
-  // smaller ceiling.
-  const remaining = useMemo(() => {
-    const cap = BigInt(Math.round(CAP_SOL * 1_000_000_000));
-    const left = cap - alreadyStaked;
-    const perWager = BigInt(Math.round(MAX_SOL * 1_000_000_000));
-    const max = left < perWager ? left : perWager;
-    const min = BigInt(Math.round(MIN_SOL * 1_000_000_000));
-    return {
-      maxSol: max > min ? Number(max) / 1_000_000_000 : 0,
-      minSol: MIN_SOL,
-      exhausted: max < min,
-    };
-  }, [alreadyStaked]);
-
-  const amountSol = useMemo(() => {
-    const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed <= 0) return remaining.minSol;
-    return Math.min(
-      Math.max(parsed, remaining.minSol),
-      remaining.maxSol || remaining.minSol,
-    );
-  }, [amount, remaining]);
+  // A live wager is priced in dollars ($3 minimum), not in a fixed SOL range:
+  // the server enforces `minLiveUsdCents` at prepare and the round has no
+  // maximum, so the ticket floors at the quoted minimum and otherwise takes
+  // whatever the bettor types. A blank amount means "the minimum" — the same
+  // default the prepare call uses.
+  const minSol = minimum ? Number(minimum.sol) : 0;
+  const parsed = Number(amount.trim());
+  const amountSol =
+    amount.trim() !== "" && Number.isFinite(parsed) && parsed > 0
+      ? parsed
+      : minSol;
 
   const draftLamports = useMemo(() => {
     try {
@@ -167,9 +149,8 @@ export function SolMarketBoard({
   const hasMoney = pool.models.some(
     (m) => BigInt(m.stakedLamports) > BigInt(0),
   );
-  const fill = remaining.maxSol > 0 ? (amountSol / remaining.maxSol) * 100 : 0;
   const canSubmit =
-    drafting && !closed && !busy && Boolean(selected) && !remaining.exhausted;
+    drafting && !closed && !busy && Boolean(selected) && draftLamports > 0;
 
   return (
     <Panel className={cx("overflow-hidden", className)}>
@@ -314,9 +295,10 @@ export function SolMarketBoard({
         </ul>
       </fieldset>
 
-      {/* The ticket: a slider, because the amount is the thing a bettor fiddles
-          with. The projection above redraws under the thumb, so the cost of a
-          bigger wager is visible before the signature, not after. */}
+      {/* The ticket: a plain amount field. The stake is priced in dollars, so
+          a range would have to chase the SOL/USD quote — a text entry with the
+          quoted minimum as its floor matches what prepare() enforces, and the
+          projection above still redraws as the bettor types. */}
       {ante && !closed ? (
         <div className="border-t border-hairline px-5 py-4">
           <button
@@ -335,73 +317,42 @@ export function SolMarketBoard({
         </div>
       ) : drafting && !closed ? (
         <div className="border-t border-hairline px-5 py-4">
-          {remaining.exhausted ? (
-            <p className="t-mono text-[0.625rem] text-faint">
-              You have reached this round&apos;s 1 SOL limit. Nothing more can
-              be staked here.
-            </p>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <label
-                  htmlFor="sol-stake"
-                  className="t-label text-[0.5625rem] text-faint"
-                >
-                  Stake
-                </label>
-                <output
-                  htmlFor="sol-stake"
-                  className="t-num text-[1.0625rem] leading-none text-ink"
-                >
-                  {amountSol.toFixed(3)}
-                  <span className="ml-1 text-[0.625rem] text-faint">SOL</span>
-                </output>
-              </div>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <label
+              htmlFor="sol-stake"
+              className="t-label text-[0.5625rem] text-faint"
+            >
+              Stake
+            </label>
+            <span className="t-num text-[1.0625rem] leading-none text-ink">
+              {amountSol.toFixed(3)}
+              <span className="ml-1 text-[0.625rem] text-faint">SOL</span>
+            </span>
+          </div>
 
-              <input
-                id="sol-stake"
-                type="range"
-                min={remaining.minSol}
-                max={remaining.maxSol}
-                step={0.001}
-                value={amountSol}
-                onChange={(event) =>
-                  onAmount(Number(event.target.value).toFixed(3))
-                }
-                aria-valuetext={`${amountSol.toFixed(3)} SOL`}
-                disabled={busy}
-                className="stake-range mt-3"
-                style={{ "--fill": `${fill}%` } as React.CSSProperties}
-              />
-
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESETS.filter((preset) => preset <= remaining.maxSol).map(
-                    (preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => onAmount(preset.toFixed(3))}
-                        disabled={busy}
-                        className={cx(
-                          "t-num rounded-full border px-2 py-0.5 text-[0.625rem] transition-colors",
-                          Math.abs(amountSol - preset) < 1e-9
-                            ? "border-magenta/50 text-ink"
-                            : "border-hairline text-faint hover:border-white/40 hover:text-muted",
-                        )}
-                      >
-                        {preset}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <span className="t-mono text-[0.5625rem] text-faint">
-                  {remaining.minSol}–{remaining.maxSol.toFixed(3)} SOL · max 1
-                  SOL per round
-                </span>
-              </div>
-            </>
-          )}
+          <div className="mt-2.5 flex items-center gap-2">
+            <input
+              id="sol-stake"
+              inputMode="decimal"
+              value={amount}
+              placeholder={minimum ? minimum.sol : undefined}
+              onChange={(event) => onAmount(event.target.value)}
+              aria-describedby="sol-stake-hint"
+              disabled={busy}
+              className="field t-num"
+            />
+            <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
+              SOL
+            </span>
+          </div>
+          <p
+            id="sol-stake-hint"
+            className="t-mono mt-2 text-[0.5625rem] text-faint"
+          >
+            minimum ${(minimum ? minimum.usdCents : 300) / 100}
+            {minimum ? ` (≈ ${minimum.sol} SOL now)` : ""} · no maximum · up to
+            10 live wagers per round
+          </p>
 
           <button
             type="button"

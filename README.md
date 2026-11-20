@@ -5,11 +5,14 @@ AI Showdown is a live visual showdown. AI models are given a creative brief
 screen. The audience watches each model's code stream in and its artwork take
 shape, then decides which is best.
 
-Betting and judging are separate. Users stake points on a model **before** the
-round runs, and the stake's commitment hash is recorded on-chain so the record
-cannot be backdated. Conformance (does it run, does it follow the brief) is
-judged by deterministic checks plus a vision model; "best" is decided by the
-crowd.
+Betting and judging are separate. Users predict which model will conform by
+wagering valueless **Devnet test SOL**: a $5 ante before the round runs, then
+live wagers while the models generate, until betting closes. Each wager's
+commitment hash lands on Solana Devnet in the same transaction as the SOL, so
+its timing can be checked and cannot be backdated. Conformance (does it run,
+does it follow the brief) is judged by deterministic checks plus a vision
+model; "best" is decided by the crowd. The leaderboard ranks correct
+predictions. No real money is ever involved.
 
 > **Note (2026-11-19):** this replaced an earlier plan of standardized Python
 > coding challenges scored on correctness, speed and code length. See the
@@ -21,7 +24,8 @@ crowd.
 - Tailwind CSS
 - Supabase for authentication and PostgreSQL
 - OpenRouter for AI model access
-- Solana Devnet for stake-commitment records
+- Solana Devnet (SPL Memo + System transfers) for wagers, commitment
+  records and payouts
 
 ## Project Structure
 
@@ -468,22 +472,38 @@ authentication, competitions, evaluation, scoring, and blockchain.
 External integrations are separated into Supabase, OpenRouter,
 and Solana modules.
 
-### Solana (G1, decided 2026-11-19)
+### Solana: what the chain proves, and what it does not
 
-The chain is used for **records, not enforcement**: lightweight SPL Memo
-transactions on Devnet, with no custom program. A stake is one Memo transaction
-containing `hash(pick, stake, nonce)`, signed by the user's wallet (the server
-pays the fee and submits); round/deadline and settlement records are
-operator-signed. Confirmed transactions are stored in
-`blockchain_transactions`, and a transaction's network-assigned `blockTime`
-against the round's `prediction_deadline` is what proves a commitment predates
-the outcome.
+The chain holds **records, not enforcement**: SPL Memo and System-transfer
+transactions on Devnet, with **no custom program**.
 
-What this does **not** prove: that models ran honestly, that the judge was
-impartial, or that a commitment backed a stake that counted in the pool. Devnet
-is disposable, so these are demo-grade guarantees. An Anchor program with
-program-enforced deadlines is the documented upgrade path. Full tradeoffs and
-the guarantee ladder: [`docs/solana-integration.md`](docs/solana-integration.md).
+- **Wagers (F20).** A wager is one transaction: the user's Devnet SOL goes to
+  the round treasury, and a memo carries `sha256(round|wager|model|lamports|nonce)`.
+  The user's Phantom wallet signs it, and the operator co-signs and pays the
+  fee. The memo carries only the hash, so the pick stays private until the
+  owner discloses it.
+- **Round records (F21–F22).** The round (id, ante deadline, rules), the
+  betting close and the settlement are operator-signed memos.
+- **Payouts.** Winnings and refunds are ordinary transfers from the treasury.
+
+Anyone can check these records:
+
+- **Verify on Devnet** on My predictions checks a wager.
+- The **On-chain record** panel on round and results pages checks the round
+  records.
+- `scripts/verify-commitment.mjs` checks a wager from the terminal.
+
+What this does **not** prove: that the models ran honestly or the judge was
+impartial; that betting closed by the stated rule (the backend enforces it, and
+the chain only timestamps it); or that the treasury, an operator wallet rather
+than a contract, holds the pool safely. Devnet is disposable, so these are
+demo-grade guarantees. Browsing, watching and voting never need a wallet;
+only making a prediction does.
+
+The plain-language version is the **What's on-chain** page (`/on-chain`). The
+source of truth, with every memo format and the trust table, is
+[`docs/solana-integration.md`](docs/solana-integration.md). An Anchor escrow
+program is the documented upgrade path, not the current shape.
 
 The OpenRouter client (F16) lives in
 `lib/server/integrations/openrouter/`. Every model receives the same prompt

@@ -25,7 +25,12 @@ import {
   verifyLandedWager,
 } from "@/lib/server/integrations/solana/transactions";
 import { commitmentHash, newNonce, wagerMemo } from "./commitment";
-import { quoteAnte, type SolUsdQuote } from "./quote";
+import {
+  quoteAnte,
+  quoteLiveMinimum,
+  type LiveMinimumQuote,
+  type SolUsdQuote,
+} from "./quote";
 import { WAGER_LIMITS } from "./limits";
 
 /**
@@ -230,17 +235,20 @@ export async function prepareWager(input: {
 
   let lamports: bigint;
   let quote: SolUsdQuote | null = null;
+  // Stored with the wager as evidence of how its amount was priced.
+  let storedQuote: SolUsdQuote | LiveMinimumQuote | null = null;
   if (kind === "ante") {
     quote = await quoteAnte(round.ante_usd_cents);
+    storedQuote = quote;
     lamports = BigInt(quote.lamports);
   } else {
     lamports = input.lamports ?? BigInt(0);
-    if (
-      lamports < WAGER_LIMITS.minLiveLamports ||
-      lamports > WAGER_LIMITS.maxLiveLamports
-    ) {
+    const minimum = await quoteLiveMinimum(WAGER_LIMITS.minLiveUsdCents);
+    storedQuote = minimum;
+    if (lamports < BigInt(minimum.minLamports)) {
+      const minSol = Number(minimum.minLamports) / 1_000_000_000;
       throw new ValidationError(
-        "A live wager must be between 0.005 and 0.25 SOL",
+        `The minimum bet after the ante is $${(WAGER_LIMITS.minLiveUsdCents / 100).toFixed(2)} in SOL (about ${minSol.toFixed(4)} SOL right now)`,
       );
     }
   }
@@ -278,7 +286,7 @@ export async function prepareWager(input: {
     message_b64: prepared.messageB64,
     prepared_expires_at: expiresAt,
     last_valid_block_height: prepared.lastValidBlockHeight,
-    quote,
+    quote: storedQuote,
   });
   if (error)
     throw new InternalError("Failed to record the prepared wager", error);
