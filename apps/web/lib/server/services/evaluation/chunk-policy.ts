@@ -14,16 +14,17 @@ import { PROMPT_TEMPLATE_VERSION } from "@/lib/server/services/llm/prompt";
  * than asserted from code that has since changed.
  *
  * The defaults are chosen for the demo's 2–3 minute budget, not for output
- * quality: three chunks of 2048 tokens is enough for a Canvas renderer and keeps
- * a round's wall-clock inside the window.
+ * quality: four chunks of 1536 tokens (the same ~6k budget) is enough for a Canvas renderer and keeps
+ * a round's wall-clock inside the window. Four equal chunks also make the
+ * SOL rounds' 75% betting cutoff land on a chunk boundary when chunks run full.
  */
 
 /** Bump when the wording of the chunk instructions changes (see prompt.ts). */
 export const CHUNK_POLICY_VERSION = "chunk-v1";
 
 export const DEFAULT_CHUNK_POLICY: ChunkPolicy = {
-  maxTokensPerChunk: 2048,
-  maxChunks: 3,
+  maxTokensPerChunk: 1536,
+  maxChunks: 4,
   // The template version pins which instruction wording produced a chunk. The
   // continuation wording is versioned with the base prompt, so this names both.
   promptTemplateVersion: `${PROMPT_TEMPLATE_VERSION}+${CHUNK_POLICY_VERSION}`,

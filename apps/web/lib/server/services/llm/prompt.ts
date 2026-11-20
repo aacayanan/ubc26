@@ -15,7 +15,7 @@ import type { ChatMessage } from "@/lib/server/integrations/openrouter/client";
  * reproduced even after this file is edited.
  */
 
-export const PROMPT_TEMPLATE_VERSION = "render-v1";
+export const PROMPT_TEMPLATE_VERSION = "render-v2";
 
 /**
  * Mirrors the render harness' own cap (`sandbox/render/harness.mjs`).
@@ -91,6 +91,17 @@ const SYSTEM_PROMPT = [
   "- Clear the frame with a background fill before drawing; a frame that never draws",
   "  is a failed frame.",
   "- Do not include tests, example calls, or console.log.",
+  "",
+  "Ambition (this is a live showcase, watched as you write):",
+  "- Build an elaborate, layered scene, not a sketch: several distinct visual",
+  "  elements, each with its own motion, plus lighting, depth, texture or",
+  "  particle detail. Use helper functions declared inside the entry point.",
+  "- The finished function must be at least 450 lines long (roughly 5,000-6,000",
+  "  tokens). That is longer than one reply allows, so the work is split across",
+  "  several replies: start writing now and keep going until your reply is cut",
+  "  off. Stopping mid-function is expected; you will be asked to continue",
+  "  exactly where you stopped. Do not close the function early, and do not",
+  "  compress the scene to fit a single reply.",
 ].join("\n");
 
 function userPrompt(challenge: GenerationChallenge): string {

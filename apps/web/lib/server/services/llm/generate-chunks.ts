@@ -63,6 +63,18 @@ export interface GenerateChunksInput {
   correlationId: string;
   /** Called after each chunk is stored, with the execution id and full source. */
   onChunk?: (chunk: ExistingChunk, fullSource: string) => Promise<void> | void;
+  /**
+   * SOL rounds: awaited after a chunk returns from the provider and BEFORE it
+   * is stored or previewed, and before a finished/failed status is written —
+   * so the betting cutoff commits before anything past it becomes visible.
+   * A throw stops generation rather than revealing output with betting open.
+   */
+  beforeReveal?: (event: {
+    kind: "chunk" | "finished" | "failed";
+    outputTokens?: number | null;
+    chars?: number;
+    terminal?: boolean;
+  }) => Promise<void>;
   /** Test seam; defaults to the configured client. */
   client?: OpenRouterClient;
 }
@@ -164,6 +176,7 @@ export async function generateChunks(
         });
 
         if (!outcome.ok) {
+          await input.beforeReveal?.({ kind: "failed" });
           const status = STATUS_BY_FAILURE[outcome.failureKind];
           const forfeited = outcome.exhausted
             ? outcome.attempts >= client.forfeitThreshold
@@ -203,6 +216,14 @@ export async function generateChunks(
         lastLatencyMs = outcome.latencyMs;
         attemptsUsed += outcome.attempts;
 
+        await input.beforeReveal?.({
+          kind: "chunk",
+          outputTokens: outcome.usage?.outputUnits ?? null,
+          chars: outcome.content.length,
+          terminal:
+            isTerminal(outcome.finishReason) || index === policy.maxChunks - 1,
+        });
+
         const source = chunkText(outcome.content, index, challenge.entryPoint);
         const chunk: ExistingChunk = {
           chunkIndex: index,
@@ -241,6 +262,8 @@ export async function generateChunks(
       }
 
       const code = joinChunks(chunks);
+
+      await input.beforeReveal?.({ kind: "finished" });
 
       await markExecutionStatus(executionId, "succeeded", {
         solutionCode: code,

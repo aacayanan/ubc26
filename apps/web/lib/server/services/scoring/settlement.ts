@@ -26,6 +26,7 @@ import {
   type RoundKind,
 } from "@/lib/server/services/scoring/parimutuel";
 import { getCrowdVote } from "@/lib/server/services/scoring/votes";
+import { recordSolSettlement } from "@/lib/server/services/wagering/sol-settlement";
 
 /**
  * Resolve a round exactly once (F18).
@@ -89,7 +90,7 @@ export async function settleRound(
 
   const { data: roundData, error: roundError } = await supabase
     .from("rounds")
-    .select("id, slug, status")
+    .select("id, slug, status, wagering_mode")
     .eq("id", roundId)
     .maybeSingle();
 
@@ -100,7 +101,12 @@ export async function settleRound(
     throw new NotFoundError(`Round ${roundId} does not exist`);
   }
 
-  const round = roundData as { id: string; slug: string; status: RoundStatus };
+  const round = roundData as {
+    id: string;
+    slug: string;
+    status: RoundStatus;
+    wagering_mode?: string;
+  };
 
   // A finalized round is not re-settled — report what is already recorded so a
   // repeated job is idempotent all the way up, not just inside the RPC.
@@ -185,6 +191,23 @@ export async function settleRound(
       stakesSettled: 0,
       pointsCredited: 0,
     };
+  }
+
+  // SOL rounds: record the money side first (write-once, queues payouts). The
+  // split follows EVERY conforming model by dead heat; the crowd vote that F15
+  // uses for the headline tie-break never moves SOL.
+  if (round.wagering_mode === "devnet_sol") {
+    await recordSolSettlement({
+      roundId,
+      conformedModelIds: models
+        .filter((model) => model.conformance === "conformed")
+        .map((model) => model.modelId),
+      modelOrder: [...models]
+        .sort((a, b) => a.ordinal - b.ordinal)
+        .map((model) => model.modelId),
+      voided: resolution.kind === "voided",
+      supabase,
+    });
   }
 
   const stakes = await loadConformanceStakes(roundId, supabase);

@@ -306,18 +306,19 @@ export default function Home() {
                   </Status>
                 </div>
                 <h3 className="t-title mt-6 text-[1.375rem] text-ink">
-                  Stake on a model before anything renders.
+                  Ante up before anything renders.
                 </h3>
                 <p className="t-body mt-3 text-sm text-muted">
-                  Stake points on the model you believe will conform to the
-                  brief. Your pick is sealed on Solana Devnet as a commitment
-                  hash — {"hash(pick, stake, nonce)"} — so the pick provably
-                  existed before a single frame was rendered.
+                  Place a $5 ante in Devnet test SOL on the model you believe
+                  will conform to the brief. The transfer and a commitment hash
+                  — {"hash(pick, amount, nonce)"} — land on Solana Devnet in one
+                  transaction, so the hash provably existed before betting
+                  closed. Your pick stays private unless you disclose it.
                 </p>
               </div>
               <div className="mt-8 flex items-center gap-3 border-t border-hairline pt-4">
                 <span className="t-mono text-[0.6875rem] text-faint">
-                  stake · 250 pts
+                  ante · $5 in devnet SOL
                 </span>
                 <span className="t-mono text-[0.6875rem] text-faint">→</span>
                 <span className="t-mono truncate text-[0.6875rem] text-violet">
@@ -444,18 +445,19 @@ export default function Home() {
               <div>
                 <div className="flex items-start justify-between gap-4">
                   <h2 className="t-title max-w-[24ch] text-[clamp(1.5rem,2.8vw,2.125rem)] text-ink">
-                    Your pick existed before the render did.
+                    Your wager is on-chain before betting closes.
                   </h2>
                   <Status tone="ink" className="shrink-0 pt-1.5">
                     Verifiable
                   </Status>
                 </div>
                 <p className="t-body mt-3 max-w-[56ch] text-sm text-muted">
-                  Every stake is a commitment on Solana Devnet. The deadline,
-                  the round id and the hash are public — anyone can check that
-                  the prediction predates the outcome. Commitment is what the
-                  chain proves. Honest execution is still a claim we make as the
-                  operator, not something the chain can see.
+                  Every wager is a Devnet SOL transfer and a commitment memo in
+                  one transaction. The round, the betting close and the
+                  settlement are recorded too, and payouts are transfers anyone
+                  can look up. Honest execution, honest judging and safe custody
+                  of the pool are still claims we make as the operator, not
+                  things the chain can see. Devnet test SOL has no value.
                 </p>
               </div>
               <div className="min-w-0 lg:w-[320px]">

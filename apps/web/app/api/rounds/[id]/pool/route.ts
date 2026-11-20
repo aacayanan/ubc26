@@ -1,53 +1,36 @@
 import { withApiErrorHandling } from "@/lib/server/http/api-error";
-import { ValidationError } from "@/lib/server/errors/app-error";
+import { NO_STORE, requireUuid } from "@/lib/server/http/json";
 import { getAuthenticatedUser } from "@/lib/server/auth";
-import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
-import { getRoundStakeSummary } from "@/lib/server/services/scoring/stakes";
-import { getViewerStake } from "@/lib/server/services/competitions/round-detail";
+import { getPoolView } from "@/lib/server/services/wagering/pool";
+import { listUserWagers } from "@/lib/server/services/wagering/wagers";
+import { listUserPayouts } from "@/lib/server/services/wagering/payouts";
 
 /**
- * The live pool, for the market board (F9): GET /api/rounds/[id]/pool
+ * Live SOL pool for a round: GET /api/rounds/[id]/pool
  *
- * Public, like the round itself. Returns the per-model split — which the round
- * detail endpoint does not, because the board prices each side individually —
- * and, when a session is present, the viewer's own stake so a draft can be
- * priced as a replacement rather than an addition.
- *
- * The split is read through the service role: `predictions` is own-rows-only
- * under RLS, and the per-model totals are an aggregate over other accounts'
- * stakes. Only aggregates and the caller's own row leave this handler; who
- * backed what is never disclosed. That is also why no timeline is offered here —
- * a per-stake history would hand a viewer the same disclosure one observation at
- * a time.
+ * Public aggregates (totals and estimated multipliers from accepted wagers
+ * only). A signed-in viewer also gets their own wagers and payouts. Never
+ * cached: a stale pool could show betting open after it closed.
  */
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   return withApiErrorHandling(request, async () => {
     const { id } = await context.params;
+    const roundId = requireUuid(id, "Round id");
 
-    if (!UUID_PATTERN.test(id)) {
-      throw new ValidationError("Round id must be a UUID");
-    }
-
-    const supabase = getServiceRoleSupabase();
+    const pool = await getPoolView(roundId);
     const user = await getAuthenticatedUser();
-    const summary = await getRoundStakeSummary(id, supabase);
-    const own = user ? await getViewerStake(id, user.id, supabase) : null;
 
-    return Response.json(
-      {
-        round_id: id,
-        pot_points: summary.potPoints,
-        stakes_by_model: summary.stakesByModel,
-        viewer_stake: own,
-      },
-      { headers: { "cache-control": "no-store" } },
-    );
+    const mine = user
+      ? {
+          wagers: await listUserWagers(user.id, roundId),
+          payouts: await listUserPayouts(user.id, roundId),
+          canWager: user.role !== "admin",
+        }
+      : null;
+
+    return Response.json({ pool, mine }, { headers: NO_STORE });
   });
 }

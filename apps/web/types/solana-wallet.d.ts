@@ -37,6 +37,14 @@ interface SolanaProvider {
     message: Uint8Array,
     encoding?: string,
   ) => Promise<{ signature: Uint8Array }>;
+  connect?: (options?: {
+    onlyIfTrusted?: boolean;
+  }) => Promise<{ publicKey: SolanaProviderPublicKey }>;
+  /**
+   * Sign only — the SOL wager flow never lets the wallet broadcast. The server
+   * checks the bytes, co-signs as fee payer and submits (2026-11-20).
+   */
+  signTransaction?: <T>(transaction: T) => Promise<T>;
 }
 
 interface Window {
