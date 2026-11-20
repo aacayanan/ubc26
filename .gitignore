@@ -23,3 +23,6 @@ Thumbs.db
 
 # Impeccable review captures (large, regenerated locally)
 .impeccable/review/
+
+# Impeccable review captures (large, regenerated locally)
+apps/*/.impeccable/review/
