@@ -308,9 +308,8 @@ function splitLargestRemainder(
 }
 
 /**
- * One payout per user. The wallet is the one on the user's lowest-id wager, an
- * order-independent stand-in for "first wager". In practice an account has one
- * linked wallet, so every wager carries the same address.
+ * Aggregate by user and payment wallet. Wallet links can be changed, so never
+ * redirect funds from an older wager to the account's current wallet.
  */
 function aggregate(
   wagers: readonly SolWager[],
@@ -318,13 +317,14 @@ function aggregate(
   kind: UserPayout["kind"],
 ): UserPayout[] {
   const amountById = new Map(outcomes.map((o) => [o.wagerId, o.lamports]));
-  const byUser = new Map<string, UserPayout>();
+  const byUserAndWallet = new Map<string, UserPayout>();
 
   // `wagers` is sorted by wager id, so the first wager seen per user is the
   // lowest id.
   for (const w of wagers) {
     const amount = amountById.get(w.wagerId) ?? BigInt(0);
-    let payout = byUser.get(w.userId);
+    const key = `${w.userId}:${w.walletAddress}`;
+    let payout = byUserAndWallet.get(key);
     if (!payout) {
       payout = {
         userId: w.userId,
@@ -333,7 +333,7 @@ function aggregate(
         lamports: BigInt(0),
         wagerIds: [],
       };
-      byUser.set(w.userId, payout);
+      byUserAndWallet.set(key, payout);
     }
     if (amount > BigInt(0)) {
       payout.lamports += amount;
@@ -341,7 +341,7 @@ function aggregate(
     }
   }
 
-  return [...byUser.values()]
+  return [...byUserAndWallet.values()]
     .filter((p) => p.lamports > BigInt(0))
     .map((p) => ({ ...p, wagerIds: [...p.wagerIds].sort(cmp) }))
     .sort((a, b) => cmp(a.userId, b.userId));

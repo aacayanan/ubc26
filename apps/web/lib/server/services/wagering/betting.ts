@@ -232,9 +232,6 @@ export class BettingMeter {
     modelId: string | null = null,
   ): Promise<void> {
     if (this.closed) return;
-    // Mark first so concurrent models do not race a second RPC; the RPC itself
-    // is idempotent regardless.
-    this.closed = true;
     try {
       await closeBetting({
         roundId: this.roundId,
@@ -243,8 +240,10 @@ export class BettingMeter {
         snapshot: this.snapshot(),
         supabase: this.supabase,
       });
+      // Only publish the local closed state after the database has committed
+      // the cutoff. Concurrent callers must remain gated until that happens.
+      this.closed = true;
     } catch (error) {
-      this.closed = false;
       throw error;
     }
   }

@@ -250,6 +250,7 @@ export async function prepareWager(input: {
   const hash = commitmentHash({ roundId, wagerId, modelId, lamports, nonce });
   const memo = wagerMemo(roundId, wagerId, hash);
 
+  // Verify the RPC is Devnet before reserving the wager or signing anything.
   const connection = await getDevnetConnection();
   const operator = getOperatorKeypair();
   const prepared = await buildWagerTransaction({
@@ -328,6 +329,8 @@ export async function submitWager(input: {
     );
   }
 
+  // Verify the RPC is Devnet before reserving the wager or signing anything.
+  const connection = await getDevnetConnection();
   const operator = getOperatorKeypair();
   const { signature, raw } = coSignVerifiedWager({
     signedB64: input.signedTransaction,
@@ -346,7 +349,6 @@ export async function submitWager(input: {
   });
   if (reserveError) throw mapReserveError(reserveError);
 
-  const connection = await getDevnetConnection();
   try {
     await connection.sendRawTransaction(raw, {
       skipPreflight: false,
@@ -442,6 +444,13 @@ export async function settleSubmitted(
   });
 
   if (!landed.ok) {
+    if (landed.reason === "transaction temporarily unavailable") {
+      return toResult(
+        wager,
+        "submitted",
+        "The confirmed transaction is not readable yet",
+      );
+    }
     // Funds may have moved; if so they are queued for refund, never kept.
     await resolve(wager.id, "rejected", {
       slot: landed.slot,

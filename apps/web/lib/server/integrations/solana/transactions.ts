@@ -257,7 +257,7 @@ export async function verifyLandedWager(input: {
   if (!tx || !tx.meta) {
     return {
       ok: false,
-      reason: "transaction not found",
+      reason: "transaction temporarily unavailable",
       slot: 0,
       blockTime: null,
       treasuryDelta: BigInt(0),

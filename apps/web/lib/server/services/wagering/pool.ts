@@ -104,13 +104,20 @@ export async function getPoolView(
     .order("ordinal", { ascending: true });
   const modelIds = (models ?? []).map((m) => m.model_id as string);
 
-  const { data: wagers, error: wagerError } = await supabase
-    .from("wagers")
-    .select("model_id, lamports, status, user_id")
-    .eq("round_id", roundId)
-    .in("status", ["submitted", "accepted"]);
-  if (wagerError)
-    throw new InternalError("Failed to read the round's wagers", wagerError);
+  const wagers: Array<Record<string, unknown>> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error: wagerError } = await supabase
+      .from("wagers")
+      .select("model_id, lamports, status, user_id")
+      .eq("round_id", roundId)
+      .in("status", ["submitted", "accepted"])
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (wagerError)
+      throw new InternalError("Failed to read the round's wagers", wagerError);
+    wagers.push(...((page ?? []) as Array<Record<string, unknown>>));
+    if (!page || page.length < 1000) break;
+  }
 
   const accepted = (wagers ?? []).filter((w) => w.status === "accepted");
   const pending = (wagers ?? []).filter((w) => w.status === "submitted").length;
@@ -124,7 +131,27 @@ export async function getPoolView(
     })),
     feeBps: Number(round.fee_bps),
   });
+  const frozen = round.final_pool as {
+    byModel?: Record<string, string>;
+    feeBps?: number;
+  } | null;
+  const displayEstimate =
+    round.pool_locked_at && frozen?.byModel
+      ? estimatePool({
+          modelIds,
+          wagers: Object.entries(frozen.byModel).map(([modelId, lamports]) => ({
+            modelId,
+            lamports: BigInt(lamports),
+          })),
+          feeBps: Number(frozen.feeBps ?? round.fee_bps),
+        })
+      : estimate;
 
+  const settlement =
+    (round.sol_settlement as Record<string, unknown> | null) ?? null;
+  const finalGross = settlement?.gross as string | undefined;
+  const finalFee = settlement?.fee as string | undefined;
+  const finalNet = settlement?.net as string | undefined;
   return {
     roundId,
     wageringMode: round.wagering_mode as string,
@@ -142,20 +169,28 @@ export async function getPoolView(
         : Number(round.token_budget_per_model),
     treasuryAddress: (round.treasury_address as string | null) ?? null,
     final: round.pool_locked_at !== null,
-    grossLamports: estimate.gross.toString(),
-    feeLamports: estimate.fee.toString(),
-    netLamports: estimate.net.toString(),
+    grossLamports:
+      round.pool_locked_at && finalGross
+        ? finalGross
+        : displayEstimate.gross.toString(),
+    feeLamports:
+      round.pool_locked_at && finalFee
+        ? finalFee
+        : displayEstimate.fee.toString(),
+    netLamports:
+      round.pool_locked_at && finalNet
+        ? finalNet
+        : displayEstimate.net.toString(),
     pendingWagers: pending,
     acceptedWagers: accepted.length,
     bettors,
-    models: estimate.models.map((m) => ({
+    models: displayEstimate.models.map((m) => ({
       modelId: m.modelId,
       stakedLamports: m.staked.toString(),
       share: m.share,
       multiplier: m.multiplier,
     })),
-    settlement:
-      (round.sol_settlement as Record<string, unknown> | null) ?? null,
+    settlement,
     meters: await readMeters(roundId, supabase),
   };
 }

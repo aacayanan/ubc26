@@ -63,7 +63,9 @@ export async function processPayouts(
   let query = supabase
     .from("payouts")
     .select("*")
-    .in("status", ["pending", "failed", "submitted", "uncertain"])
+    .or(
+      `status.in.(pending,submitted,uncertain),and(status.eq.failed,attempt.lt.${MAX_ATTEMPTS})`,
+    )
     .order("created_at", { ascending: true })
     .limit(options.limit ?? 25);
   if (options.roundId) query = query.eq("round_id", options.roundId);
@@ -98,11 +100,13 @@ export async function processPayouts(
       r.attempt < MAX_ATTEMPTS,
   );
   const rounds = [...new Set(sendable.map((r) => r.round_id))];
-  const balance = BigInt(
-    await connection.getBalance(treasury.publicKey, "confirmed"),
-  );
-
   for (const roundId of rounds) {
+    const { error: lockError } = await supabase.rpc("lock_sol_treasury");
+    if (lockError)
+      throw new InternalError("Failed to lock the SOL treasury", lockError);
+    const balance = BigInt(
+      await connection.getBalance(treasury.publicKey, "confirmed"),
+    );
     const { data: owed } = await supabase
       .from("payouts")
       .select("lamports")
@@ -151,7 +155,9 @@ async function resolveInFlight(
       .from("payouts")
       .update({ status: "failed", last_error: "no signature recorded" })
       .eq("id", row.id)
-      .eq("status", row.status);
+      .eq("status", row.status)
+      .eq("attempt", row.attempt)
+      .is("signature", null);
     return "pending";
   }
   const outcome = await confirmSignature({
@@ -170,7 +176,9 @@ async function resolveInFlight(
         last_error: null,
       })
       .eq("id", row.id)
-      .eq("status", row.status);
+      .eq("status", row.status)
+      .eq("attempt", row.attempt)
+      .eq("signature", row.signature);
     return "confirmed";
   }
   if (
@@ -188,7 +196,9 @@ async function resolveInFlight(
             : `failed on-chain: ${outcome.error}`,
       })
       .eq("id", row.id)
-      .eq("status", row.status);
+      .eq("status", row.status)
+      .eq("attempt", row.attempt)
+      .eq("signature", row.signature);
   }
   return "pending";
 }
@@ -207,7 +217,9 @@ async function sendPayout(
     await supabase
       .from("payouts")
       .update({ status: "blocked", last_error: "invalid recipient address" })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("status", row.status)
+      .eq("attempt", row.attempt);
     return "failed";
   }
 
@@ -233,6 +245,7 @@ async function sendPayout(
     })
     .eq("id", row.id)
     .eq("status", row.status)
+    .eq("attempt", row.attempt)
     .select("id");
   if (claimError)
     throw new InternalError("Failed to claim a payout", claimError);
@@ -250,7 +263,9 @@ async function sendPayout(
         .from("payouts")
         .update({ status: "failed", last_error: message.slice(0, 300) })
         .eq("id", row.id)
-        .eq("status", "submitted");
+        .eq("status", "submitted")
+        .eq("attempt", row.attempt + 1)
+        .eq("signature", built.signature);
       return "failed";
     }
     // Possibly forwarded: leave it submitted; the next run resolves it.
@@ -273,7 +288,9 @@ async function sendPayout(
         confirmed_at: new Date().toISOString(),
       })
       .eq("id", row.id)
-      .eq("status", "submitted");
+      .eq("status", "submitted")
+      .eq("attempt", row.attempt + 1)
+      .eq("signature", built.signature);
     logger.info("payout.confirmed", {
       payoutId: row.id,
       roundId: row.round_id,
@@ -287,7 +304,9 @@ async function sendPayout(
       .from("payouts")
       .update({ status: "uncertain", last_error: "confirmation timed out" })
       .eq("id", row.id)
-      .eq("status", "submitted");
+      .eq("status", "submitted")
+      .eq("attempt", row.attempt + 1)
+      .eq("signature", built.signature);
     return "pending";
   }
   await supabase
@@ -300,7 +319,9 @@ async function sendPayout(
           : `failed on-chain: ${outcome.error}`,
     })
     .eq("id", row.id)
-    .eq("status", "submitted");
+    .eq("status", "submitted")
+    .eq("attempt", row.attempt + 1)
+    .eq("signature", built.signature);
   return "failed";
 }
 

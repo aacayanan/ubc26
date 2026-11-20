@@ -199,7 +199,8 @@ export function SolRound({
     phase === "ante" &&
     now > 0 &&
     now < Date.parse(deadline);
-  const liveOpen = status === "RUNNING" && phase === "live";
+  const liveOpen =
+    phase === "live" && status !== "SETTLED" && status !== "VOIDED";
   const canAnte = anteOpen && !acceptedAnte && mine?.canWager;
   const canLive = liveOpen && Boolean(acceptedAnte) && mine?.canWager;
 
@@ -391,9 +392,11 @@ export function SolRound({
           </span>
         </div>
         <p className="t-mono mt-1 text-[0.625rem] text-faint">
-          {pool?.final
-            ? "final"
-            : "estimated payout multipliers · change until betting closes"}
+          {pool?.settlement
+            ? "settled returns"
+            : pool?.final
+              ? "pool locked · returns depend on the outcome"
+              : "estimated payout multipliers · change until betting closes"}
           {pool && pool.pendingWagers > 0
             ? ` · ${pool.pendingWagers} confirming`
             : ""}
@@ -411,7 +414,7 @@ export function SolRound({
                   {sol(entry?.stakedLamports)} ·{" "}
                   <span className="text-ink">
                     {entry?.multiplier
-                      ? `${entry.multiplier.toFixed(2)}×${pool?.final ? "" : " est."}`
+                      ? `${entry.multiplier.toFixed(2)}×${pool?.settlement ? "" : " est."}`
                       : "no backers"}
                   </span>
                 </span>

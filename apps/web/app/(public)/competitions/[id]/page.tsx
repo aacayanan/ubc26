@@ -81,6 +81,32 @@ export default function CompetitionDetailPage() {
     };
   }, [roundId, reloadKey]);
 
+  // The initial round read is intentionally cheap, but the lifecycle changes
+  // while the SOL pool is polling. Keep the parent status current so the live
+  // surface mounts as soon as the ante window becomes live.
+  useEffect(() => {
+    if (!roundId) return;
+    let active = true;
+    const refreshStatus = async () => {
+      const response = await fetch(`/api/rounds/${roundId}/progress`, {
+        cache: "no-store",
+      });
+      if (!active || !response.ok) return;
+      const progress = (await response.json()) as { status?: string };
+      if (progress.status) {
+        setRound((current) =>
+          current ? { ...current, state: progress.status! } : current,
+        );
+      }
+    };
+    void refreshStatus();
+    const timer = window.setInterval(() => void refreshStatus(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [roundId]);
+
   // SOL rounds (Devnet prototype) render the wagering view instead of the
   // points stake form. Read from the pool endpoint, which every round has.
   const [solMode, setSolMode] = useState(false);
@@ -465,7 +491,7 @@ export default function CompetitionDetailPage() {
       {/* The two clocks, made visible: once the round is past OPEN the stake
           panel can no longer act, and the page becomes the show — each model's
           code streaming, and its render the moment that code compiles. */}
-      {round.state !== "OPEN" ? (
+      {solMode || round.state !== "OPEN" ? (
         <LiveRoundPanel roundId={round.id} initialStatus={round.state} />
       ) : null}
     </div>

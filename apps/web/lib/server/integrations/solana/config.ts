@@ -68,6 +68,11 @@ export function getOperatorKeypair(): Keypair {
     "SOLANA_OPERATOR_KEYPAIR",
     process.env.SOLANA_OPERATOR_KEYPAIR,
   );
+  if (treasury && treasury.publicKey.equals(operator.publicKey)) {
+    throw new ConfigurationError(
+      "The treasury and operator keypairs must differ",
+    );
+  }
   return operator;
 }
 

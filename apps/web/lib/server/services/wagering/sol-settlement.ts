@@ -65,12 +65,19 @@ export async function recordSolSettlement(
   if (round.sol_settlement)
     return round.sol_settlement as Record<string, unknown>;
 
-  const { data: rows, error } = await supabase
-    .from("wagers")
-    .select("id, user_id, wallet_address, model_id, lamports")
-    .eq("round_id", roundId)
-    .eq("status", "accepted");
-  if (error) throw new InternalError("Failed to read accepted wagers", error);
+  const rows: Array<Record<string, unknown>> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await supabase
+      .from("wagers")
+      .select("id, user_id, wallet_address, model_id, lamports")
+      .eq("round_id", roundId)
+      .eq("status", "accepted")
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new InternalError("Failed to read accepted wagers", error);
+    rows.push(...((page ?? []) as Array<Record<string, unknown>>));
+    if (!page || page.length < 1000) break;
+  }
 
   const wagers: SolWager[] = (rows ?? []).map((row) => ({
     wagerId: row.id as string,

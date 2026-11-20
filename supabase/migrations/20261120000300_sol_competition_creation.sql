@@ -39,9 +39,10 @@ begin
   if not exists (select 1 from public.challenges where id = p_challenge_id and status = 'published') then
     raise exception 'challenge must be published' using errcode = '22023';
   end if;
-  if (select count(*) from public.llm_models where id = any(p_model_ids) and is_active)
+  if (select count(*) from public.llm_models
+      where id = any(p_model_ids) and is_active and role = 'competitor')
      <> cardinality(p_model_ids) then
-    raise exception 'all participating models must be active' using errcode = '22023';
+    raise exception 'all participating models must be active competitors' using errcode = '22023';
   end if;
   if nullif(trim(p_treasury_address), '') is null then
     raise exception 'a SOL round needs a treasury address' using errcode = '22023';
