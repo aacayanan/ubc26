@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
 import { SolRound } from "@/components/sol-round";
 import { LiveRoundPanel } from "@/components/live-round-panel";
+import { RoundRecords } from "@/components/round-records";
 import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
@@ -300,6 +301,8 @@ export default function CompetitionDetailPage() {
         initialStatus={round.state}
         className="mt-5"
       />
+      {/* F21: the round's operator records on Devnet, checkable on demand. */}
+      <RoundRecords roundId={round.id} />
     </div>
   );
 }
