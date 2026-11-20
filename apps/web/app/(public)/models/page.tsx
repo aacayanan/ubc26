@@ -12,6 +12,7 @@ import {
   roundLabel,
   roundTone,
 } from "@/components/ui";
+import { HelpCircle } from "@/components/icons";
 
 /**
  * Historical model performance (F25).
@@ -140,10 +141,7 @@ export default function ModelsPage() {
 
   return (
     <div className="shell py-14 sm:py-16">
-      <PageHeader
-        title="Models"
-        description="Two separate records that are never merged: how often a model conformed to the brief, and how often the crowd named it best. Only comparable rounds count — the post-pivot visual briefs."
-      />
+      <PageHeader title="Models" />
 
       <div className="mt-10">
         {error ? (
@@ -192,11 +190,6 @@ export default function ModelsPage() {
                 <SectionHeading aside={<GapCount gaps={data.gaps} />}>
                   Rounds without a result
                 </SectionHeading>
-                <p className="t-body mt-2 max-w-[62ch] text-sm text-muted">
-                  These comparable rounds did not settle. They are named here
-                  rather than quietly left out of the records above, so a void
-                  never looks like a race nobody entered.
-                </p>
                 <ul className="mt-5 grid gap-2">
                   {data.gaps.map((gap) => (
                     <li key={gap.round_id}>
@@ -247,13 +240,13 @@ function ModelCard({ model }: { model: ModelStat }) {
           label="Conformance"
           rate={model.conformance_rate}
           detail={`${model.conformance_wins} conformed`}
-          caption="Judge's ruling across the rounds it was judged"
+          caption="How often the judge ruled this model's render followed the brief. Measured over the rounds it was actually judged — a forfeit or an unreachable judge does not count against it."
         />
         <RateBlock
           label="Crowd"
           rate={model.crowd_win_rate}
           detail={`${model.crowd_wins} named best`}
-          caption="Share of settled rounds the crowd picked it"
+          caption="How often the crowd named this model best, as a share of the settled rounds it competed in. A round nobody voted in counts as a miss."
         />
       </div>
 
@@ -281,8 +274,11 @@ function ModelCard({ model }: { model: ModelStat }) {
         </p>
       ) : null}
 
-      <div className="mt-6 border-t border-hairline pt-4">
-        <p className="t-label text-[0.5625rem] text-faint">Recent rounds</p>
+      <details className="mt-6 border-t border-hairline pt-4">
+        <summary className="t-label cursor-pointer text-[0.5625rem] text-muted">
+          Recent rounds
+          <span className="ml-2 text-faint">({model.recent.length})</span>
+        </summary>
         <ul className="mt-3 grid gap-2.5">
           {model.recent.map((row) => (
             <li
@@ -306,7 +302,7 @@ function ModelCard({ model }: { model: ModelStat }) {
             </li>
           ))}
         </ul>
-      </div>
+      </details>
     </Panel>
   );
 }
@@ -322,10 +318,29 @@ function RateBlock({
   detail: string;
   caption: string;
 }) {
+  // The caption used to sit below the meter as a permanent third line. It now
+  // lives in a hover/focus tooltip instead, so the card shows the two numbers
+  // and explains them on demand. `aria-describedby` keeps the explanation
+  // reachable by keyboard and screen reader, where a hover-only hint would be
+  // lost. `pointer-events-none` keeps the box from intercepting the hover it
+  // is answering.
+  const hintId = `models-hint-${label.toLowerCase()}`;
+
   return (
-    <div>
+    <div className="group relative">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="t-label text-[0.5625rem] text-faint">{label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="t-label text-[0.5625rem] text-faint">{label}</span>
+          <span
+            tabIndex={0}
+            role="note"
+            aria-describedby={hintId}
+            aria-label={`What ${label} means`}
+            className="cursor-help text-faint transition-colors group-hover:text-muted group-focus-within:text-muted"
+          >
+            <HelpCircle className="size-3" />
+          </span>
+        </span>
         <span className="t-num text-[0.8125rem] text-ink">{pct(rate)}</span>
       </div>
       <Meter
@@ -337,7 +352,13 @@ function RateBlock({
             : `${label}: ${pct(rate)}, ${detail}`
         }
       />
-      <p className="t-mono mt-2 text-[0.5625rem] text-faint">{caption}</p>
+      <p
+        id={hintId}
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 w-max max-w-[min(19rem,calc(100vw-4rem))] rounded-lg border border-hairline-strong bg-void-3 px-3 py-2 text-[0.6875rem] leading-relaxed text-muted opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {caption}
+      </p>
     </div>
   );
 }

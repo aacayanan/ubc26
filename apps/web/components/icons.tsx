@@ -58,3 +58,23 @@ export function ArrowRight({ className = "size-4" }: IconProps) {
     </svg>
   );
 }
+
+/** A circled question mark — the affordance for an explanation on hover. */
+export function HelpCircle({ className = "size-4" }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M6.15 6.1a1.9 1.9 0 1 1 2.35 1.85c-.35.12-.5.4-.5.75v.35" />
+      <path d="M8 11.5h.01" />
+    </svg>
+  );
+}
