@@ -36,6 +36,8 @@ interface Pool {
   bettingCloseModelId: string | null;
   feeBps: number;
   anteUsdCents: number;
+  tier: string | null;
+  tierLabel: string | null;
   cutoffBps: number;
   tokenBudgetPerModel: number | null;
   treasuryAddress: string | null;
@@ -217,6 +219,12 @@ export function SolRound({
     phase === "live" && status !== "SETTLED" && status !== "VOIDED";
   const canAnte = anteOpen && !acceptedAnte && mine?.canWager;
   const canLive = liveOpen && Boolean(acceptedAnte) && mine?.canWager;
+  // The buy-in comes from the round's tier, never a constant: a $2 cheap round
+  // and a $10 exclusive round differ only in this number.
+  const anteLabel =
+    pool?.anteUsdCents === undefined
+      ? "tier-priced"
+      : `$${(pool.anteUsdCents / 100).toFixed(2)}`;
 
   async function placeWager(kind: "ante" | "live") {
     if (!selected) return;
@@ -228,7 +236,9 @@ export function SolRound({
       setStep({
         kind: "working",
         label:
-          kind === "ante" ? "Pricing the $5 ante…" : "Preparing the wager…",
+          kind === "ante"
+            ? `Pricing the ${anteLabel} ante…`
+            : "Preparing the wager…",
       });
       const prepareResponse = await fetch(
         `/api/rounds/${roundId}/wagers/prepare`,
@@ -338,6 +348,11 @@ export function SolRound({
                 ? "Live betting open"
                 : "Betting closed"}
           </Status>
+          {pool?.tierLabel ? (
+            <span className="t-mono text-[0.6875rem] text-faint">
+              {pool.tierLabel} tier · {anteLabel} buy-in
+            </span>
+          ) : null}
           {anteOpen ? (
             <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
               <span className="text-faint">ante closes in</span>
@@ -350,7 +365,7 @@ export function SolRound({
         </div>
         <p className="t-body mt-4 text-sm text-muted">
           {phase === "ante"
-            ? "Place the $5-equivalent ante in Devnet SOL to join this round. Live betting opens when generation starts."
+            ? `Place the ${anteLabel}-equivalent ante in Devnet SOL to join this round. Live betting opens when generation starts.`
             : phase === "live"
               ? `Betting closes the moment any model reaches ${Math.round(cutoff * 100)}% of its output-token budget, or earlier if a model finishes or fails.`
               : pool?.bettingCloseReason
@@ -453,7 +468,7 @@ export function SolRound({
       {mine && (canAnte || canLive) ? (
         <Panel className="p-7">
           <h2 className="t-title text-[1rem] text-ink">
-            {canAnte ? "Place your $5 ante" : "Place a live wager"}
+            {canAnte ? `Place your ${anteLabel} ante` : "Place a live wager"}
           </h2>
           <fieldset className="mt-5" disabled={busy || confirming}>
             <legend className="t-label text-[0.5625rem] text-faint">
@@ -531,8 +546,7 @@ export function SolRound({
             </div>
           ) : (
             <p className="t-mono mt-4 text-[0.625rem] text-faint">
-              ${((pool?.anteUsdCents ?? 500) / 100).toFixed(2)} in Devnet SOL at
-              the current SOL/USD reference price
+              {anteLabel} in Devnet SOL at the current SOL/USD reference price
             </p>
           )}
 

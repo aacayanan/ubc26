@@ -49,8 +49,8 @@ async function main() {
   console.log(`▶ chunk policy ${policy.maxChunks} × ${policy.maxTokensPerChunk} = ${budget} tokens/model`);
 
   const { data: challenge } = await supabase.from("challenges").select("id").eq("status", "published").eq("language", "javascript").limit(1).single();
-  const { data: models } = await supabase.from("llm_models").select("id, name").eq("is_active", true).eq("role", "competitor").order("sort_order").limit(3);
-  check(challenge && models && models.length >= 2, `a published brief and ${models?.length} active competitor models`);
+  const { data: models } = await supabase.from("llm_models").select("id, name").eq("is_active", true).eq("role", "competitor").eq("tier", "cheap").order("sort_order").limit(3);
+  check(challenge && models && models.length >= 2, `a published brief and ${models?.length} active cheap-tier models`);
 
   // One bettor with a real Devnet ante, so the cancellation refund is real too.
   const keypair = Keypair.generate();
