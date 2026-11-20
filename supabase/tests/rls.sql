@@ -130,8 +130,13 @@ begin
   select count(*) into n from public.llm_models;
   if n < 1 then raise exception 'FAIL: anon cannot read llm_models'; end if;
 
+  -- F27: an execution row is readable only once its round is past OPEN, because
+  -- it carries the model's source and the provider's error text. The fixture
+  -- round is OPEN, so the honest assertion is that anon sees none of it.
   select count(*) into n from public.model_executions;
-  if n < 1 then raise exception 'FAIL: anon cannot read model_executions'; end if;
+  if n <> 0 then
+    raise exception 'FAIL: anon can read model_executions before the round locks (%)', n;
+  end if;
 
   select count(*) into n from public.test_results;
   if n < 1 then raise exception 'FAIL: anon cannot read test_results'; end if;
@@ -352,6 +357,30 @@ begin
 
   update public.predictions set points_awarded = 10
     where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and category = 'accuracy';
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- F27: the other side of the two clocks. Once the round locks, an execution
+-- becomes readable to a viewer — the live view depends on it, and F17's own
+-- tables (generation_chunks, render_previews, judge_verdicts) already scope
+-- exactly this way. Asserted as anon so the check cannot pass on a grant the
+-- service role holds instead.
+-- ---------------------------------------------------------------------------
+reset role;
+update public.rounds set status = 'LOCKED' where slug = 'r-main';
+
+set local role anon;
+set local request.jwt.claims to '{"role":"anon"}';
+set local request.jwt.claim.sub to '';
+
+do $$
+declare
+  n int;
+begin
+  select count(*) into n from public.model_executions;
+  if n < 1 then
+    raise exception 'FAIL: anon cannot read model_executions after the round locks';
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------------------

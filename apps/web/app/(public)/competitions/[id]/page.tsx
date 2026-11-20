@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
+import { LiveRoundPanel } from "@/components/live-round-panel";
 import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
@@ -430,6 +431,13 @@ export default function CompetitionDetailPage() {
           )}
         </Panel>
       </div>
+
+      {/* The two clocks, made visible: once the round is past OPEN the stake
+          panel can no longer act, and the page becomes the show — each model's
+          code streaming, and its render the moment that code compiles. */}
+      {round.state !== "OPEN" ? (
+        <LiveRoundPanel roundId={round.id} initialStatus={round.state} />
+      ) : null}
     </div>
   );
 }
