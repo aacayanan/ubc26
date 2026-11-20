@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  needsAccountSetup,
+  usernameToLoginEmail,
+} from "@/lib/auth/wallet-account";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 type Mode = "sign-in" | "sign-up";
@@ -32,7 +36,9 @@ export function LoginForm() {
 
   function friendlyError(message: string) {
     if (message.includes("Invalid login credentials")) {
-      return "That email and password don't match. Try again or create an account.";
+      return mode === "sign-in"
+        ? "That username or email and password don't match. Try again or create an account."
+        : "That email and password don't match. Try again or create an account.";
     }
     if (message.toLowerCase().includes("rate limit")) {
       return "Too many attempts. Supabase limits auth emails, so wait a few minutes and try again — or sign in if you already have an account.";
@@ -62,13 +68,14 @@ export function LoginForm() {
           "No Solana wallet found. Install Phantom, then reload this page.",
         );
       }
-      const { error } = await getBrowserSupabase().auth.signInWithWeb3({
+      const { data, error } = await getBrowserSupabase().auth.signInWithWeb3({
         chain: "solana",
         statement: "Sign in to AI Showdown to stake on rounds.",
         wallet: window.solana,
       });
       if (error) throw error;
-      finishAuth();
+      // A new wallet account finishes by choosing a username and password.
+      finishAuth(needsAccountSetup(data.user) ? "/create-account" : undefined);
     } catch (err: unknown) {
       setError(
         friendlyError(
@@ -88,8 +95,12 @@ export function LoginForm() {
     try {
       const supabase = getBrowserSupabase();
       if (mode === "sign-in") {
+        // No "@" means a username from a Phantom sign-up.
+        const identifier = email.trim();
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: identifier.includes("@")
+            ? identifier
+            : usernameToLoginEmail(identifier),
           password,
         });
         if (error) throw error;
@@ -146,12 +157,12 @@ export function LoginForm() {
       <form onSubmit={handleSubmit} className="mt-7 space-y-4">
         <div>
           <label htmlFor="email" className="t-label mb-2 block text-faint">
-            Email
+            {mode === "sign-in" ? "Email or username" : "Email"}
           </label>
           <input
             id="email"
-            type="email"
-            autoComplete="email"
+            type={mode === "sign-in" ? "text" : "email"}
+            autoComplete={mode === "sign-in" ? "username" : "email"}
             required
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? "auth-error" : undefined}
@@ -220,8 +231,8 @@ export function LoginForm() {
         Sign in with Solana
       </button>
       <p className="t-body mt-3 text-center text-xs text-faint">
-        Uses your Phantom wallet. A wallet sign-in can stake on live rounds
-        immediately.
+        Uses your Phantom wallet. New here? You will pick a username and
+        password next, so you can sign back in either way.
       </p>
 
       <p className="t-body mt-7 text-center text-sm text-muted">
