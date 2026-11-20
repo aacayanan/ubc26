@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Panel, Status } from "@/components/ui";
 
@@ -160,7 +161,10 @@ export function RoundRecords({ roundId }: { roundId: string }) {
         AI Showdown publishes each step of this round on Solana Devnet, so its
         timing can be checked independently. These are the operator&rsquo;s
         records of what the backend decided. They don&rsquo;t prove the models
-        or the judge were honest.
+        or the judge were honest.{" "}
+        <Link href="/on-chain" className="link">
+          What&rsquo;s on-chain
+        </Link>
       </p>
 
       {error ? (

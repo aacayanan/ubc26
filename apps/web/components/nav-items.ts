@@ -15,6 +15,12 @@ export const marketingNav: NavItem[] = [
   { href: "/results", label: "Results" },
 ];
 
+/** The footer adds the trust page; the header bar has no room for it. */
+export const footerNav: NavItem[] = [
+  ...marketingNav,
+  { href: "/on-chain", label: "What's on-chain" },
+];
+
 export function getSignedInNav(isAdmin: boolean): NavItem[] {
   return [
     ...marketingNav,

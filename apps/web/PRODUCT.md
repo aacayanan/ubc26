@@ -16,17 +16,20 @@ they either watch or take a side.
 
 Two account shapes decide what a person can do, not who they are:
 
-- **Wallet-identified account** (Sign in with Solana): can join live rounds.
-- **Email/practice account**: browses, watches, votes on renders, and holds a
-  points balance, but cannot stake on a live round until a wallet is linked.
+- **Wallet-identified account** (Sign in with Solana): can make predictions
+  with Devnet SOL; finishes sign-up with a username and password.
+- **Email/practice account**: browses, watches and votes on renders, but cannot
+  make a prediction until a wallet is linked. Nobody ever needs a wallet to
+  browse, watch or vote.
 
 ## Product Purpose
 
 A live arena where language models are given one creative brief — a spinning
 donut, a pulsing reactor core — and write code that renders. The audience
-watches the code stream in chunks and the artifact take shape, staking points
-on which model will conform before anything runs, and voting on which result
-is best after it does.
+watches the code stream in chunks and the artifact take shape, wagering
+valueless Devnet SOL on which model will conform (a $5 ante before the round
+runs, live wagers while it generates), and voting on which result is best after
+it does.
 
 Success is a person who did not arrive caring about LLMs staying through a
 round because the contest is legible on sight: two clocks, three renders, one
@@ -35,12 +38,13 @@ crowd verdict.
 ## Positioning
 
 Conformance is measured; "best" is the crowd's. The two are never conflated,
-and no vote or visible render can exist before the staking deadline. A
-commitment placed after the outcome is visible is provably impossible: its hash
-is recorded on Solana Devnet before the deadline, so it cannot be backdated.
-The chain proves the hash existed in time; which model it names is disclosed by
-the backer, not readable by strangers. Most AI leaderboards publish a number
-nobody can audit; this one publishes a commitment nobody can backdate.
+and no vote, final render or verdict is visible before betting closes. Every
+prediction's commitment hash lands on Solana Devnet in the same transaction as
+its wager, so the record of when it was made cannot be backdated. The server
+and database enforce the deadline; the chain timestamps it. The chain proves
+the hash existed in time; which model it names is disclosed by the backer, not
+readable by strangers. Most AI leaderboards publish a number nobody can audit;
+this one publishes a commitment nobody can backdate.
 
 ## Operating Context
 
@@ -58,8 +62,9 @@ nobody can audit; this one publishes a commitment nobody can backdate.
 
 **Hard constraints (non-negotiable):**
 
-- No real-money wagering, deposits or payouts. The parimutuel pool
-  redistributes non-redeemable points only.
+- No real-money wagering, deposits or payouts. The parimutuel pool moves
+  valueless Devnet test SOL only; Mainnet stays blocked pending legal and
+  security review.
 - LLM-generated code never executes on the application server — only inside a
   sandbox with CPU/memory/time limits and no network or filesystem access.
 - A viewer-facing render runs in an iframe with `sandbox="allow-scripts"` and
@@ -68,16 +73,18 @@ nobody can audit; this one publishes a commitment nobody can backdate.
 - API credentials stay server-side.
 - Solana Devnet for all blockchain interaction during development.
 
-**What Solana does and does not guarantee.** On-chain (G1 — lightweight SPL Memo
-transactions, no custom program): prediction commitments (hashes) signed by the
-user's wallet, round IDs and deadlines, and a settlement record. These are
-records, **not enforcement** — the deadline is enforced by the backend, and the
-chain only proves a commitment existed before it. Not on-chain: whether model
-execution or scoring was honest, whether the judge was impartial, or whether a
-commitment backed a stake that counted in the pool — those remain
-trusted-backend claims. Devnet is disposable, so these are demo-grade
-guarantees. This distinction must survive into any user- or judge-facing
-material. Full record: `docs/solana-integration.md`.
+**What Solana does and does not guarantee.** On-chain (SPL Memo transactions,
+no custom program): each wager's commitment hash, signed by the user's wallet
+in the same transaction as the SOL transfer; operator-signed records of the
+round (id, ante deadline, rules), the betting close and the settlement; and
+payout transfers. These are records, **not enforcement** — the backend and
+database enforce the deadline, and the chain only timestamps it. Not on-chain:
+whether model execution or scoring was honest, whether the judge was impartial,
+whether betting closed by the stated rule, or whether the treasury holds the
+pool safely — those remain trusted-backend claims. Devnet is disposable, so
+these are demo-grade guarantees. The source of truth is
+`docs/solana-integration.md`; the site's plain-language copy lives only in
+`lib/chain-guarantees.ts` (shown on `/on-chain`), never restated per page.
 
 **Stack (existing):** Next.js 16 App Router, TypeScript, Tailwind CSS v4
 (CSS-first `@theme`, no config file), Supabase (Postgres + auth + RLS),

@@ -130,19 +130,89 @@ npx tsx --conditions=react-server --env-file=.env.local --tsconfig tsconfig.json
 was not altered. It does **not** prove that the models, the judge or settlement
 were run honestly; every verification surface says so.
 
+### Round, close and settlement records (F21 / F22, as shipped)
+
+Three operator-signed memos per round, one per idempotency key, stored in
+`blockchain_transactions` with `round_id` set:
+
+| Record         | Memo                                                                                             | Key                |
+| -------------- | ------------------------------------------------------------------------------------------------ | ------------------ |
+| Round opened   | `aisd:v2:round:<roundId>:<ante deadline, ISO-8601 UTC>:<budget>:<cutoffBps>:<feeBps>:<treasury>` | `round:<roundId>`  |
+| Betting closed | `aisd:v2:close:<roundId>:<reason>:<closed at, UTC>:<snapshot hash>`                              | `close:<roundId>`  |
+| Settled        | `aisd:v2:settle:<roundId>:<kind>:<reason>:<winners>:<gross>:<fee>:<net>:<payout count>`          | `settle:<roundId>` |
+
+- **Correlation and exactness.** Each memo names its round. The round memo's
+  deadline is the same instant as `rounds.prediction_deadline`, in UTC.
+- **A void is recorded as a void.** A refund names its reason: `voided`,
+  `no_winner` or `winner_unbacked`. Settlement memos are summary facts only;
+  per-user amounts stay off-chain.
+- **Never duplicated, never lost.** A retry re-sends the memo text fixed by the
+  first attempt. It replaces a transaction only once the previous one provably
+  can no longer land (`chain-records.ts`). The internal job
+  `POST /api/internal/jobs/sol {"action":"chain-records"}` does three things:
+  - records the round memo for open rounds that have none, only while the ante
+    deadline is still ahead
+  - records the settlement memo for settled rounds that have none
+  - retries anything that is not confirmed
+- **Visible and checkable.** The round and results pages show an
+  **On-chain record** panel; `pending` / `timeout` / `failed` are never shown as
+  confirmed. `GET /api/rounds/[id]/records?check=1` reads each transaction back
+  from Devnet and checks:
+  - the memo is on-chain and operator-signed
+  - it matches the round row
+  - for a settlement, the stored settlement agrees with `round_outcomes` and the
+    conformance results (`round-records.ts`)
+
+### Plain-language summary (site copy)
+
+This is the user- and judge-facing version of the table below. The site renders
+it from `apps/web/lib/chain-guarantees.ts` on the **What's on-chain** page
+(`/on-chain`), linked from the footer, the landing page and every record panel.
+Change this section first, then that file. Never restate a guarantee in a page's
+own words.
+
+**What anyone can check:**
+
+- Your prediction was locked in on time, and your pick was not swapped later.
+  Each prediction is one transaction carrying your SOL and a fingerprint (hash)
+  of your pick.
+- The round's ID, deadline and rules were announced up front.
+- When betting closed and why, and the result: who was paid, the 5% fee, or why
+  everyone was refunded.
+- Payouts and refunds really happened.
+
+**What you still trust AI Showdown for:**
+
+- That the models and the judge were honest.
+- That betting closed by the stated rule. The server enforces it; the chain only
+  timestamps it.
+- That the treasury holds the pool safely. It is an operator wallet, not a smart
+  contract.
+- That the split was calculated correctly. The operator records prove when the
+  operator said something, not that it was right.
+
+**Limits:**
+
+- Devnet only, with valueless test SOL; no real money.
+- Devnet can be reset, so these are demo-grade records, not a permanent ledger.
+
+**Who needs a wallet:** nobody, to browse, watch or vote. A Phantom wallet is
+needed only to make predictions, because the backer signs their own commitment.
+No blockchain knowledge is required; a signature prompt is.
+
 ### What the chain proves — and what it does not
 
-| Claim                                                                          | Who guarantees it                                                             |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| This wallet paid X lamports to the treasury with this commitment, at this slot | **Chain** (transaction, signatures, balances)                                 |
-| The transfer and the commitment happened together                              | **Chain** (one atomic transaction)                                            |
-| The round, its ante deadline and rules were announced                          | Operator memo (`aisd:v2:round:…`) — operator attestation                      |
-| When and why betting closed                                                    | Operator memo (`aisd:v2:close:…`) — operator attestation                      |
-| The settlement result (winners, gross, fee, net, payout count)                 | Operator memo (`aisd:v2:settle:…`) — a **record**, not a payment              |
-| A winner was actually paid                                                     | **Chain** — the payout transfer, shown separately from the record             |
-| The deadlines were enforced                                                    | **Backend + database** (locked rows, co-signature); the chain only timestamps |
-| The models ran honestly and the judge was impartial                            | **Trusted backend** — not verifiable on-chain                                 |
-| The funds are held safely                                                      | **Trusted operator** — the treasury is an operator key, not a program         |
+| Claim                                                                          | Who guarantees it                                                                             |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| This wallet paid X lamports to the treasury with this commitment, at this slot | **Chain** (transaction, signatures, balances)                                                 |
+| The transfer and the commitment happened together                              | **Chain** (one atomic transaction)                                                            |
+| The round, its ante deadline and rules were announced                          | Operator memo (`aisd:v2:round:…`), checked against the round row — operator attestation       |
+| When and why betting closed                                                    | Operator memo (`aisd:v2:close:…`) — operator attestation                                      |
+| The settlement result (kind, reason, winners, gross, fee, net, payout count)   | Operator memo (`aisd:v2:settle:…`), checked against the outcome — a **record**, not a payment |
+| A winner was actually paid                                                     | **Chain** — the payout transfer, shown separately from the record                             |
+| The deadlines were enforced                                                    | **Backend + database** (locked rows, co-signature); the chain only timestamps                 |
+| The models ran honestly and the judge was impartial                            | **Trusted backend** — not verifiable on-chain                                                 |
+| The funds are held safely                                                      | **Trusted operator** — the treasury is an operator key, not a program                         |
 
 **What users must trust AI Showdown to do:** run the models and the judge
 honestly; close betting by the stated rule and never co-sign after it; hold the

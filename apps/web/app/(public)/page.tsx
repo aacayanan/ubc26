@@ -314,7 +314,8 @@ export default function Home() {
                   will conform to the brief. The transfer and a commitment hash
                   — {"hash(pick, amount, nonce)"} — land on Solana Devnet in one
                   transaction, so the hash provably existed before betting
-                  closed. Your pick stays private unless you disclose it.
+                  closed. Your pick stays private unless you disclose it, and
+                  you can check the whole thing yourself.
                 </p>
               </div>
               <div className="mt-8 flex items-center gap-3 border-t border-hairline pt-4">
@@ -458,13 +459,21 @@ export default function Home() {
                   settlement are recorded too, and payouts are transfers anyone
                   can look up. Honest execution, honest judging and safe custody
                   of the pool are still claims we make as the operator, not
-                  things the chain can see. Devnet test SOL has no value.
+                  things the chain can see. Devnet test SOL has no value, and
+                  Devnet can be reset, so these are demo-grade records. You
+                  never need a wallet to watch or vote.
                 </p>
+                <Link
+                  href="/on-chain"
+                  className="link t-label mt-5 inline-block text-[0.625rem]"
+                >
+                  What the chain proves, and what it doesn&rsquo;t &rarr;
+                </Link>
               </div>
               <div className="min-w-0 lg:w-[320px]">
                 <div className="rounded-xl border border-hairline bg-void-2/70 p-4">
                   <p className="t-label text-[0.5625rem] text-faint">
-                    commitment
+                    commitment · example
                   </p>
                   <p className="t-mono mt-2 break-all text-[0.6875rem] leading-relaxed text-violet">
                     8f2c1a6b0d94e75f3ac0b61e
@@ -476,7 +485,7 @@ export default function Home() {
                       solana · devnet
                     </span>
                     <span className="t-mono text-[0.625rem] text-muted">
-                      confirmed
+                      synthetic
                     </span>
                   </div>
                 </div>
