@@ -79,10 +79,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="shell py-14 sm:py-16">
-      <PageHeader
-        title="Leaderboard"
-        description="Points are awarded when a round settles — stake on the model that conforms to the brief and you take a share of the pool."
-      />
+      <PageHeader title="Leaderboard" />
 
       <div className="mt-10">
         {error ? (
