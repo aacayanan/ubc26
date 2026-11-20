@@ -147,3 +147,133 @@ export async function getActiveCompetitions(
 
   return entries;
 }
+
+// ---------------------------------------------------------------------------
+// Live rounds (F27)
+// ---------------------------------------------------------------------------
+
+/** Statuses a round is *happening* in — the ones worth watching right now. */
+const LIVE_STATUSES = ["RUNNING", "EVALUATING", "RETRYING"] as const;
+
+export type LiveRoundStatus = (typeof LIVE_STATUSES)[number];
+
+/** One round currently in progress, for the "Live now" strip. */
+export interface LiveCompetition {
+  id: string;
+  title: string;
+  status: LiveRoundStatus;
+  models: Array<{ id: string; name: string }>;
+  /** How many models are done, judged or otherwise, out of the lineup. */
+  progress: { done: number; total: number };
+}
+
+/**
+ * Rounds that are running or being judged right now.
+ *
+ * Deliberately not "recently settled": the strip is a live indicator, and a
+ * finished round belongs in Results. `progress` counts models that have reached
+ * a resting state (a ruling, a forfeit, or an outage), which is the honest
+ * "how far along is this" without claiming a percentage of unknown work.
+ *
+ * Rounds are never fabricated: an empty list means the strip does not render.
+ */
+export async function getLiveCompetitions(
+  supabase: SupabaseClient,
+): Promise<LiveCompetition[]> {
+  const { data, error } = await supabase
+    .from("rounds")
+    .select(
+      "id, slug, status, challenges(title), round_models(ordinal, llm_models(id, name))",
+    )
+    .in("status", LIVE_STATUSES as unknown as string[])
+    .order("started_at", { ascending: false, nullsFirst: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    slug: string;
+    status: string;
+    challenges: { title: string } | Array<{ title: string }> | null;
+    round_models: Array<{
+      ordinal: number;
+      llm_models:
+        { id: string; name: string } | Array<{ id: string; name: string }>;
+    }> | null;
+  }>;
+
+  if (rows.length === 0) return [];
+
+  // One read for every round's per-model resting state, rather than a query per
+  // model. A generation execution that is no longer `pending`/`running` is done,
+  // and a stored judge verdict also counts as done.
+  const roundIds = rows.map((row) => row.id);
+
+  const [{ data: executionRows }, { data: verdictRows }] = await Promise.all([
+    supabase
+      .from("model_executions")
+      .select("round_id, model_id, status")
+      .in("round_id", roundIds)
+      .eq("run_type", "generation"),
+    supabase
+      .from("judge_verdicts")
+      .select("round_id, subject_model_id")
+      .in("round_id", roundIds),
+  ]);
+
+  const doneByRound = new Map<string, Set<string>>();
+  for (const execution of (executionRows ?? []) as Array<{
+    round_id: string;
+    model_id: string;
+    status: string;
+  }>) {
+    if (execution.status === "pending" || execution.status === "running") {
+      continue;
+    }
+    const done = doneByRound.get(execution.round_id) ?? new Set<string>();
+    done.add(execution.model_id);
+    doneByRound.set(execution.round_id, done);
+  }
+  for (const verdict of (verdictRows ?? []) as Array<{
+    round_id: string;
+    subject_model_id: string;
+  }>) {
+    const done = doneByRound.get(verdict.round_id) ?? new Set<string>();
+    done.add(verdict.subject_model_id);
+    doneByRound.set(verdict.round_id, done);
+  }
+
+  return rows.map((row) => {
+    const challenge = Array.isArray(row.challenges)
+      ? row.challenges[0]
+      : row.challenges;
+
+    const models = (row.round_models ?? [])
+      .slice()
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .flatMap((roundModel) =>
+        Array.isArray(roundModel.llm_models)
+          ? roundModel.llm_models
+          : [roundModel.llm_models],
+      )
+      .filter((model): model is { id: string; name: string } =>
+        Boolean(model?.id),
+      )
+      .map((model) => ({ id: model.id, name: model.name }));
+
+    const done = doneByRound.get(row.id) ?? new Set<string>();
+
+    return {
+      id: row.id,
+      title: challenge?.title ?? row.slug,
+      status: row.status as LiveRoundStatus,
+      models,
+      progress: {
+        done: models.filter((model) => done.has(model.id)).length,
+        total: models.length,
+      },
+    };
+  });
+}

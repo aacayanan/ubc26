@@ -1,13 +1,26 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { RenderedFrame, RoundStatus } from "@ai-showdown/shared";
+import type {
+  ChunkPolicy,
+  ExecutionStatus,
+  LiveModelProgress,
+  LivePreview,
+  LiveRoundProgress,
+  RenderedFrame,
+  RoundStatus,
+} from "@ai-showdown/shared";
 import { InternalError, NotFoundError } from "@/lib/server/errors/app-error";
 import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
+import { joinChunks } from "@/lib/server/services/evaluation/source-assembly";
+import {
+  deriveFailure,
+  deriveModelState,
+} from "@/lib/server/services/pipeline/live-model-state";
+import { listChunks } from "@/lib/server/services/pipeline/pipeline-persist";
 
 /**
- * Live round progress for the viewer (F17 acceptance: live progress is
- * queryable; the UI itself is F27/F19).
+ * Live round progress for the viewer (F17 backend, F27 surface).
  *
  * The two-clocks rule decides visibility, and it is enforced here as well as in
  * RLS: nothing that could reveal a render exists before the round is past
@@ -15,75 +28,32 @@ import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin
  * code, no frames — so this endpoint cannot be used to peek at an outcome while
  * stakes are still open.
  *
- * The assembly is deliberately plain: the viewer polls, and every read is a
- * handful of indexed lookups rather than a join graph. Progress is exactly
- * "what each model has produced so far", which is what a polling viewer needs.
+ * The payload is shaped for *polling*. A viewer hits this every couple of
+ * seconds, so it carries one frame per model rather than the whole artifact and
+ * one preview per chunk rather than every frame ever drawn. The full frame set
+ * belongs to the results API, which is read once.
+ *
+ * State derivation and failure copy live in `live-model-state.ts`; this module
+ * is the I/O around it.
  */
 
-export interface LiveModelProgress {
-  modelId: string;
-  name: string;
-  ordinal: number;
-  /** `pending` until the first chunk exists, then the execution's status. */
-  state:
-    | "pending"
-    | "generating"
-    | "rendering"
-    | "judging"
-    | "conformed"
-    | "not_conformed"
-    | "forfeited"
-    | "unavailable";
-  /** The code written so far, revealed only after the round locks. */
-  code: string | null;
-  /** Whether the latest preview chunk was parseable; false is "compiling…". */
-  compiling: boolean;
-  /** Preview frames of the partial render, oldest first. */
-  previewFrames: RenderedFrame[];
-  /** Full-geometry frames once the finished source has been rendered. */
-  frames: RenderedFrame[];
-  gatePassed: boolean | null;
-  judge: {
-    verdict: "conformed" | "not_conformed" | "unavailable";
-    reason: string;
-    criteria: Array<{
-      id: string;
-      question: string;
-      weight: number;
-      passed: boolean;
-      reason: string;
-    }>;
-  } | null;
-  /** Viewer-safe explanation when the model forfeited at generation time. */
-  failureReason: string | null;
-}
-
-export interface LiveRoundProgress {
-  roundId: string;
-  slug: string;
-  status: RoundStatus;
-  /** True once the round is past OPEN; only then is anything renderable shown. */
-  revealed: boolean;
-  brief: { title: string; prompt: string } | null;
-  models: LiveModelProgress[];
-  /** The round's recorded outcome, once F15/F18 have written one. */
-  outcome: {
-    kind: "settled" | "voided";
-    winnerModelId: string | null;
-    fanFavoriteModelId: string | null;
-    reason: string;
-  } | null;
-}
+export type {
+  LiveModelProgress,
+  LivePreview,
+  LiveRoundProgress,
+} from "@ai-showdown/shared";
 
 interface ExecutionRow {
   id: string;
   model_id: string;
   run_type: string;
-  status: string;
+  status: ExecutionStatus;
   solution_code: string | null;
   error_message: string | null;
+  failure_kind: string | null;
   subject_model_id: string | null;
   attempt: number;
+  config: unknown;
 }
 
 /** Round statuses at which a render may be shown (the two-clocks rule). */
@@ -102,6 +72,14 @@ const REVEALED_STATUSES: readonly RoundStatus[] = [
 export function isRevealed(status: RoundStatus): boolean {
   return REVEALED_STATUSES.includes(status);
 }
+
+/** Round-level explanations while a round is being retried or has failed. */
+const RETRY_MESSAGES: Partial<Record<RoundStatus, string>> = {
+  RETRYING:
+    "A render or judge could not be reached, so this round is being retried rather than settled on a guess.",
+  FAILED:
+    "This round could not be completed. Its stakes are void and every point returns.",
+};
 
 export async function getLiveRoundProgress(
   roundId: string,
@@ -164,31 +142,35 @@ export async function getLiveRoundProgress(
       status: round.status,
       revealed: false,
       brief: null,
-      models: models.map((model) => ({
-        ...model,
-        state: "pending",
-        code: null,
-        compiling: false,
-        previewFrames: [],
-        frames: [],
-        gatePassed: null,
-        judge: null,
-        failureReason: null,
-      })),
+      replay: null,
+      models: models.map((model) => emptyProgress(model)),
+      retry: null,
       outcome: null,
     };
   }
 
   const { data: briefRow } = await supabase
     .from("challenges")
-    .select("title, prompt")
+    .select(
+      "title, prompt, entry_point, target_duration_ms, frame_count, frame_width, frame_height",
+    )
     .eq("id", round.challenge_id)
     .maybeSingle();
+
+  const brief = briefRow as {
+    title: string;
+    prompt: string;
+    entry_point: string | null;
+    target_duration_ms: number | null;
+    frame_count: number | null;
+    frame_width: number | null;
+    frame_height: number | null;
+  } | null;
 
   const { data: executionRows, error: execError } = await supabase
     .from("model_executions")
     .select(
-      "id, model_id, run_type, status, solution_code, error_message, subject_model_id, attempt",
+      "id, model_id, run_type, status, solution_code, error_message, failure_kind, subject_model_id, attempt, config",
     )
     .eq("round_id", roundId)
     .order("attempt", { ascending: true });
@@ -204,7 +186,7 @@ export async function getLiveRoundProgress(
     generationByModel.set(execution.model_id, execution);
   }
 
-  const judgeRows = new Map<string, LiveModelProgress["judge"]>();
+  const judgeRows = new Map<string, NonNullable<LiveModelProgress["judge"]>>();
 
   const { data: verdictRows } = await supabase
     .from("judge_verdicts")
@@ -247,23 +229,72 @@ export async function getLiveRoundProgress(
       ? await readArtifact(execution.id, supabase)
       : null;
 
+    // The code shown is the source *written so far*, assembled from the chunks
+    // that have landed. `solution_code` is only written when generation
+    // finishes, so reading it alone left the pane empty for the entire stream.
+    const chunks = execution ? await readChunkSource(execution, supabase) : [];
+    const code =
+      chunks.length > 0
+        ? joinChunks(chunks)
+        : (execution?.solution_code ?? null);
+
     const latest = previews[previews.length - 1] ?? null;
+
+    // The last chunk whose partial source actually parsed. This is what the
+    // viewer's iframe should be drawing: a chunk that never parsed would throw
+    // on its first frame, and the audience would see "replay unavailable" where
+    // a working render exists. Falls back to the finished source when every
+    // chunk parsed (the normal case).
+    const lastParsedIndex = previews.reduce(
+      (best, preview) => (preview.parseOk ? preview.chunkIndex : best),
+      -1,
+    );
+    const renderableCode =
+      lastParsedIndex >= 0
+        ? joinChunks(
+            chunks.filter((chunk) => chunk.chunkIndex <= lastParsedIndex),
+          )
+        : code;
+
+    const facts = {
+      executionStatus: execution?.status ?? null,
+      failureKind: execution?.failure_kind ?? null,
+      artifactStored: artifact !== null,
+      artifactGatePassed: artifact ? artifact.gatePassed : null,
+      artifactUnavailable: artifact?.unavailable ?? false,
+      judgeRuled: judge !== null,
+      judgeVerdict: judge?.verdict ?? null,
+    };
 
     progress.push({
       ...model,
-      state: deriveState(execution, judge),
-      code: execution?.solution_code ?? null,
+      state: deriveModelState(facts),
+      code,
+      // What the quarantined iframe should run: the newest source that parsed.
+      renderableCode,
       // "Compiling…" means the latest partial source could not be parsed yet —
       // the code is growing and the next chunk may still close the function.
       compiling: latest !== null && !latest.parseOk,
-      previewFrames: previews.flatMap((preview) => preview.frames),
-      frames: artifact?.frames ?? [],
+      previews,
+      chunks: {
+        generated: chunks.length,
+        expected: expectedChunks(execution),
+        // The policy ceiling is not a target: a model that finished its answer
+        // in one chunk of three is done, not a third of the way through. Only a
+        // run that actually stopped early is incomplete.
+        complete:
+          latest?.parseOk === true ||
+          (execution !== null &&
+            execution !== undefined &&
+            execution.status === "succeeded"),
+      },
+      // One frame is enough to watch a still; the whole artifact would make
+      // every poll megabytes. The full set lives on the results API.
+      frames: artifact ? artifact.frames.slice(-1) : [],
+      frameCount: artifact?.frameCount ?? 0,
       gatePassed: artifact?.gatePassed ?? null,
       judge,
-      failureReason:
-        execution && execution.status !== "succeeded"
-          ? execution.error_message
-          : null,
+      failure: deriveFailure(facts),
     });
   }
 
@@ -273,18 +304,23 @@ export async function getLiveRoundProgress(
     .eq("round_id", roundId)
     .maybeSingle();
 
+  const retryMessage = RETRY_MESSAGES[round.status];
+
   return {
     roundId: round.id,
     slug: round.slug,
     status: round.status,
     revealed: true,
-    brief: briefRow
-      ? {
-          title: (briefRow as { title: string }).title,
-          prompt: (briefRow as { prompt: string }).prompt,
-        }
-      : null,
+    brief: brief ? { title: brief.title, prompt: brief.prompt } : null,
+    replay: {
+      entryPoint: brief?.entry_point ?? "drawFrame",
+      frameWidth: brief?.frame_width ?? 640,
+      frameHeight: brief?.frame_height ?? 480,
+      targetDurationMs: brief?.target_duration_ms ?? 4000,
+      frameCount: brief?.frame_count ?? 24,
+    },
     models: progress,
+    retry: retryMessage ? { message: retryMessage } : null,
     outcome: outcomeRow
       ? {
           kind: (outcomeRow as { kind: "settled" | "voided" }).kind,
@@ -299,49 +335,62 @@ export async function getLiveRoundProgress(
   };
 }
 
-function deriveState(
-  execution: ExecutionRow | undefined,
-  judge: { verdict: string } | null,
-): LiveModelProgress["state"] {
-  if (judge) {
-    return judge.verdict === "conformed"
-      ? "conformed"
-      : judge.verdict === "not_conformed"
-        ? "not_conformed"
-        : "unavailable";
-  }
+/** A model's progress before the round reveals anything. */
+function emptyProgress(model: {
+  modelId: string;
+  name: string;
+  ordinal: number;
+}): LiveModelProgress {
+  return {
+    ...model,
+    state: "pending",
+    code: null,
+    renderableCode: null,
+    compiling: false,
+    previews: [],
+    chunks: { generated: 0, expected: 0, complete: false },
+    frames: [],
+    frameCount: 0,
+    gatePassed: null,
+    judge: null,
+    failure: null,
+  };
+}
 
-  if (!execution) return "pending";
+/**
+ * The chunk ceiling this execution was run under.
+ *
+ * Read from the policy snapshot stored on the execution rather than from the
+ * current environment: a round run under a three-chunk policy must still read
+ * as three even if the deployment has since changed. Falls back to 0 when the
+ * snapshot is missing, which the UI renders as an indeterminate count.
+ */
+function expectedChunks(execution: ExecutionRow | undefined): number {
+  if (!execution) return 0;
+  const config = execution.config as
+    { chunkPolicy?: Partial<ChunkPolicy> } | null | undefined;
+  const max = config?.chunkPolicy?.maxChunks;
+  return typeof max === "number" && max > 0 ? max : 0;
+}
 
-  switch (execution.status) {
-    case "pending":
-      return "pending";
-    case "running":
-      return "generating";
-    case "succeeded":
-      // Generated; either rendering full frames or awaiting the judge.
-      return "judging";
-    case "unavailable":
-      return "unavailable";
-    case "timeout":
-    case "error":
-      return "forfeited";
-    default:
-      return "generating";
+/** The stored chunks for an execution, as the source-assembly joiner expects. */
+async function readChunkSource(
+  execution: ExecutionRow,
+  supabase: SupabaseClient,
+): Promise<Array<{ chunkIndex: number; source: string }>> {
+  try {
+    return await listChunks(execution.id, supabase);
+  } catch {
+    // A chunk read failing must not blank the whole live view; the finished
+    // source (when there is one) is still a usable fallback.
+    return [];
   }
 }
 
 async function readPreviews(
   executionId: string,
   supabase: SupabaseClient,
-): Promise<
-  Array<{
-    chunkIndex: number;
-    parseOk: boolean;
-    rendered: boolean;
-    frames: RenderedFrame[];
-  }>
-> {
+): Promise<LivePreview[]> {
   const { data } = await supabase
     .from("render_previews")
     .select("chunk_index, parse_ok, rendered, frames")
@@ -366,18 +415,31 @@ async function readPreviews(
 async function readArtifact(
   executionId: string,
   supabase: SupabaseClient,
-): Promise<{ gatePassed: boolean; frames: RenderedFrame[] } | null> {
+): Promise<{
+  gatePassed: boolean;
+  unavailable: boolean;
+  frameCount: number;
+  frames: RenderedFrame[];
+} | null> {
   const { data } = await supabase
     .from("rendered_artifacts")
-    .select("gate_passed, frames")
+    .select("gate_passed, unavailable, frame_count, frames")
     .eq("execution_id", executionId)
     .maybeSingle();
 
   if (!data) return null;
 
-  const row = data as { gate_passed: boolean; frames: unknown };
+  const row = data as {
+    gate_passed: boolean;
+    unavailable: boolean;
+    frame_count: number | null;
+    frames: unknown;
+  };
+
   return {
     gatePassed: row.gate_passed,
+    unavailable: row.unavailable === true,
+    frameCount: row.frame_count ?? 0,
     frames: Array.isArray(row.frames) ? (row.frames as RenderedFrame[]) : [],
   };
 }
