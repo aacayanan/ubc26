@@ -12,7 +12,9 @@ The team replaced the points-only, bet-before-anything-runs mechanic with
 - **multiple live wagers** while the models generate, with estimated payout
   multipliers that move with accepted wagers;
 - betting **closes when the first model reaches 75% of its output-token
-  budget**, or earlier if a model finishes or fails;
+  budget**, or earlier if a model finishes or fails. Every model writes the
+  round's full chunk schedule, so "finishes" lands at the same chunk index for
+  every competitor and one model's pace cannot close the window mid-race;
 - **automatic Devnet SOL payouts** to winners after judging, net of a disclosed
   platform fee (default 5%, winning rounds only); dead heat for tied winners;
   full refunds for void rounds or unbacked winners.

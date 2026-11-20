@@ -12,7 +12,9 @@ import { recordOperatorMemoInBackground } from "./chain-records";
  *
  * The rule: betting closes when the FIRST model reaches `cutoff_bps` (75%) of
  * its output-token budget — or earlier, when a model finishes or fails, since
- * either reveals outcome information.
+ * either reveals outcome information. Every model runs the round's full chunk
+ * schedule, so "finished" means the same chunk index for all of them and one
+ * model's pace cannot close the window mid-race.
  *
  * "Close, then publish": the pipeline calls `beforeReveal` after a chunk comes
  * back from the provider but BEFORE it is stored, previewed or marked finished.
@@ -39,7 +41,11 @@ export interface MeterEvent {
   kind: "chunk" | "finished" | "failed";
   outputTokens?: number | null;
   chars?: number;
-  /** The chunk is the model's last (finish_reason stop, or the final chunk). */
+  /**
+   * The chunk is the round's last slot — the model is done writing, not merely
+   * done with one reply. Every model fills every slot, so this is the same
+   * position in the race for all of them (see `generate-chunks.ts`).
+   */
   terminal?: boolean;
 }
 

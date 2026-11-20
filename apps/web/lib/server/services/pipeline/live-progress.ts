@@ -266,6 +266,8 @@ export async function getLiveRoundProgress(
       judgeVerdict: judge?.verdict ?? null,
     };
 
+    const expected = expectedChunks(execution);
+
     progress.push({
       ...model,
       state: deriveModelState(facts),
@@ -278,15 +280,16 @@ export async function getLiveRoundProgress(
       previews,
       chunks: {
         generated: chunks.length,
-        expected: expectedChunks(execution),
-        // The policy ceiling is not a target: a model that finished its answer
-        // in one chunk of three is done, not a third of the way through. Only a
-        // run that actually stopped early is incomplete.
+        expected,
+        // Every model fills the round's full chunk schedule, so the ceiling *is*
+        // the finish line: a model is done when its generation succeeded or when
+        // it has written every slot. A parseable chunk no longer means done —
+        // a model that finishes early keeps extending the scene in its
+        // remaining slots, and marking it complete at chunk 1 of 4 would show a
+        // full bar while it is still writing.
         complete:
-          latest?.parseOk === true ||
-          (execution !== null &&
-            execution !== undefined &&
-            execution.status === "succeeded"),
+          execution?.status === "succeeded" ||
+          (expected > 0 && chunks.length >= expected),
       },
       // One frame is enough to watch a still; the whole artifact would make
       // every poll megabytes. The full set lives on the results API.

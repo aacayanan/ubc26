@@ -48,7 +48,11 @@ Signing in Phantom, or even broadcasting, is not acceptance.
    Eligible accounts place more wagers on any model. Estimated multipliers move
    with accepted wagers only.
 3. **Closed** — betting closes the moment the **first** model reaches 75% of its
-   output-token budget, or earlier if a model finishes or fails. The pipeline
+   output-token budget, or earlier if a model finishes or fails. Every model
+   fills the round's full chunk schedule (a model that answers the brief in one
+   reply gets extension instructions for its remaining slots), so "finishes"
+   means the same chunk index for every competitor — the chunk counter and the
+   cutoff describe one race, not three. The pipeline
    checks each chunk **before** it is stored or previewed, so the close commits
    before any output past the threshold is visible. An optional per-round stall
    safeguard closes betting if generation stops producing chunks. Final renders,

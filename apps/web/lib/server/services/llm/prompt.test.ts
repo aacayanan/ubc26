@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChunkMessages,
   buildGenerationMessages,
+  CONTINUATION_INSTRUCTION,
   extractRenderCode,
+  FINAL_CHUNK_INSTRUCTION,
   hashMessages,
   MAX_SOURCE_CHARS,
   PROMPT_TEMPLATE_VERSION,
@@ -78,7 +81,7 @@ describe("buildGenerationMessages", () => {
   });
 
   it("exports a bump-able template version", () => {
-    expect(PROMPT_TEMPLATE_VERSION).toBe("render-v2");
+    expect(PROMPT_TEMPLATE_VERSION).toBe("render-v3");
   });
 });
 
@@ -238,5 +241,74 @@ describe("withTokenFloor", () => {
     const config = { temperature: 0 };
     withTokenFloor(config);
     expect(config).toEqual({ temperature: 0 });
+  });
+});
+
+describe("buildChunkMessages", () => {
+  const base = { challenge: CHALLENGE, codeSoFar: "", chunkIndex: 0 };
+
+  it("asks chunk 0 exactly as an unchunked turn would", () => {
+    expect(
+      buildChunkMessages({
+        ...base,
+        isFinalChunk: false,
+        completeSoFar: false,
+      }),
+    ).toEqual(buildGenerationMessages(CHALLENGE));
+  });
+
+  it("continues a model that has not finished", () => {
+    const messages = buildChunkMessages({
+      challenge: CHALLENGE,
+      codeSoFar: "function drawFrame(t) {",
+      chunkIndex: 1,
+      isFinalChunk: false,
+      completeSoFar: false,
+    });
+
+    expect(messages.at(-2)).toEqual({
+      role: "assistant",
+      content: "function drawFrame(t) {",
+    });
+    expect(messages.at(-1)?.content).toBe(CONTINUATION_INSTRUCTION);
+  });
+
+  it("extends a model that already finished, in its remaining slots", () => {
+    const messages = buildChunkMessages({
+      challenge: CHALLENGE,
+      codeSoFar: "function drawFrame(t) {}",
+      chunkIndex: 2,
+      isFinalChunk: false,
+      completeSoFar: true,
+    });
+
+    const instruction = messages.at(-1)?.content as string;
+    // Never "continue where you stopped": there is nothing left to continue.
+    expect(instruction).not.toBe(CONTINUATION_INSTRUCTION);
+    expect(instruction).not.toBe(FINAL_CHUNK_INSTRUCTION);
+    // The capture is per chunk, so two extensions do not redeclare a const.
+    expect(instruction).toContain("const __earlier2 = drawFrame;");
+    // The model is told why a second declaration is wrong, not just told not to.
+    expect(instruction).toMatch(/hoisted/);
+  });
+
+  it("gives each extension slot a distinct capture name", () => {
+    const one = buildChunkMessages({
+      challenge: CHALLENGE,
+      codeSoFar: "function drawFrame(t) {}",
+      chunkIndex: 1,
+      isFinalChunk: false,
+      completeSoFar: true,
+    }).at(-1)?.content as string;
+    const three = buildChunkMessages({
+      challenge: CHALLENGE,
+      codeSoFar: "function drawFrame(t) {}",
+      chunkIndex: 3,
+      isFinalChunk: true,
+      completeSoFar: true,
+    }).at(-1)?.content as string;
+
+    expect(one).toContain("__earlier1");
+    expect(three).toContain("__earlier3");
   });
 });

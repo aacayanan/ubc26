@@ -142,32 +142,99 @@ beforeEach(() => {
 });
 
 describe("generateChunks", () => {
-  it("stops at the chunk that finishes with `stop`", async () => {
+  it("fills every chunk slot even when a model finishes early", async () => {
+    // The bug this pins: a model that answers the whole brief in its first
+    // reply used to end at chunk 1 of 3, while its rivals wrote 3. The early
+    // finisher closed live betting mid-race and its chunk counter read "1 of 3".
     const testClient = client([
-      success("function drawFrame(t, ctx) {\n", "length"),
-      success("  ctx.fillRect(0, 0, 1, 1);\n}", "stop"),
+      success(
+        "function drawFrame(t, ctx) {\n  ctx.fillRect(0, 0, 1, 1);\n}",
+        "stop",
+      ),
+      success("drawFrame = () => {};", "stop"),
+      success("", "stop"),
     ]);
 
     const result = await run(testClient);
 
-    expect(testClient.generate).toHaveBeenCalledTimes(2);
-    expect(result.chunksGenerated).toBe(2);
-    expect(result.code).toBe(
-      "function drawFrame(t, ctx) {\n  ctx.fillRect(0, 0, 1, 1);\n}",
-    );
+    expect(testClient.generate).toHaveBeenCalledTimes(POLICY.maxChunks);
+    expect(result.chunksGenerated).toBe(POLICY.maxChunks);
+    expect(result.status).toBe("succeeded");
   });
 
-  it("keeps generating while the chunk cap is hit", async () => {
+  it("asks a finished model to extend, not to continue", async () => {
+    const testClient = client([
+      success(
+        "function drawFrame(t, ctx) {\n  ctx.fillRect(0, 0, 1, 1);\n}",
+        "stop",
+      ),
+      success("drawFrame = () => {};", "stop"),
+      success("drawFrame = () => {};", "stop"),
+    ]);
+
+    await run(testClient);
+
+    // Chunk 0 is the plain brief.
+    const first = testClient.generate.mock.calls[0][0].messages;
+    expect(first.map((m: { role: string }) => m.role)).toEqual([
+      "system",
+      "user",
+    ]);
+
+    // The later chunks carry the extension instruction, which tells the model to
+    // layer over the existing entry point — never to write a second `function
+    // drawFrame` declaration, which hoisting would turn into infinite recursion.
+    const second = testClient.generate.mock.calls[1][0].messages;
+    const instruction = second[second.length - 1].content as string;
+    expect(instruction).toContain(
+      "already defines a complete, working renderer",
+    );
+    expect(instruction).toContain("const __earlier1 = drawFrame;");
+    expect(instruction).toContain("drawFrame = function (t, ctx, canvas) {");
+    expect(instruction).toContain("Do not write a second");
+  });
+
+  it("continues a model that has not finished, keeping one schedule", async () => {
     const testClient = client([
       success("function drawFrame(t, ctx) {\n", "length"),
       success("  ctx.fillRect(0, 0, 1, 1);\n", "length"),
       success("}", "stop"),
     ]);
 
-    const result = await run(testClient);
+    await run(testClient);
 
-    expect(testClient.generate).toHaveBeenCalledTimes(3);
-    expect(result.status).toBe("succeeded");
+    const second = testClient.generate.mock.calls[1][0].messages;
+    const instruction = second[second.length - 1].content as string;
+    expect(instruction).toContain("continuing the same function");
+    expect(instruction).not.toContain("already defines a complete");
+  });
+
+  it("marks only the round's last chunk as terminal", async () => {
+    // `terminal` is what closes live betting. An early `stop` must not carry it.
+    const beforeReveal = vi.fn();
+    const testClient = client([
+      success("function drawFrame(t) {}", "stop"),
+      success("drawFrame = () => {};", "stop"),
+      success("drawFrame = () => {};", "stop"),
+    ]);
+
+    await generateChunks({
+      roundId: "round-1",
+      executionId: "exec-1",
+      model: MODEL,
+      challenge: CHALLENGE,
+      policy: POLICY,
+      correlationId: "corr-1",
+      client: testClient,
+      beforeReveal,
+    });
+
+    const terminals = beforeReveal.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.kind === "chunk")
+      .map((event) => event.terminal);
+
+    expect(terminals).toEqual([false, false, true]);
   });
 
   it("does not exceed maxChunks", async () => {
@@ -215,14 +282,15 @@ describe("generateChunks", () => {
     );
   });
 
-  it("makes no provider call when a prior run already finished", async () => {
+  it("makes no provider call once every chunk slot is stored", async () => {
     store.chunks = [
       {
         chunkIndex: 0,
         source: "function drawFrame(t) {",
-        finishReason: "length",
+        finishReason: "stop",
       },
-      { chunkIndex: 1, source: "}", finishReason: "stop" },
+      { chunkIndex: 1, source: "}", finishReason: "length" },
+      { chunkIndex: 2, source: "// detail", finishReason: "stop" },
     ];
 
     const testClient = client([]);
@@ -230,8 +298,31 @@ describe("generateChunks", () => {
 
     expect(testClient.generate).not.toHaveBeenCalled();
     expect(result.chunksGenerated).toBe(0);
-    expect(result.chunksResumed).toBe(2);
-    expect(result.code).toBe("function drawFrame(t) {\n}");
+    expect(result.chunksResumed).toBe(3);
+  });
+
+  it("resumes a run that stopped early by filling the missing slots", async () => {
+    // A round stored under the old rule ended at a `stop` chunk. The chunks are
+    // still real output, so they are resumed — but the two slots the model never
+    // wrote are generated, so the round's chunk count is still the schedule's.
+    store.chunks = [
+      {
+        chunkIndex: 0,
+        source: "function drawFrame(t) { ctx.fillRect(0, 0, 1, 1); }",
+        finishReason: "stop",
+      },
+    ];
+
+    const testClient = client([
+      success("drawFrame = () => {};", "stop"),
+      success("drawFrame = () => {};", "stop"),
+    ]);
+
+    const result = await run(testClient);
+
+    expect(testClient.generate).toHaveBeenCalledTimes(2);
+    expect(result.chunksResumed).toBe(1);
+    expect(result.chunksGenerated).toBe(2);
   });
 
   it("maps a provider failure to a forfeit and never returns partial credit", async () => {
@@ -265,7 +356,11 @@ describe("generateChunks", () => {
   });
 
   it("asks chunk 0 exactly as an unchunked turn would", async () => {
-    const testClient = client([success("function drawFrame(t) {}", "stop")]);
+    const testClient = client([
+      success("function drawFrame(t) {}", "stop"),
+      success("drawFrame = () => {};", "stop"),
+      success("drawFrame = () => {};", "stop"),
+    ]);
     await run(testClient);
 
     const request = testClient.generate.mock.calls[0][0];

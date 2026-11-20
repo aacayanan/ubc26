@@ -19,8 +19,14 @@ import { PROMPT_TEMPLATE_VERSION } from "@/lib/server/services/llm/prompt";
  * SOL rounds' 75% betting cutoff land on a chunk boundary when chunks run full.
  */
 
-/** Bump when the wording of the chunk instructions changes (see prompt.ts). */
-export const CHUNK_POLICY_VERSION = "chunk-v1";
+/**
+ * Bump when the wording of the chunk instructions changes (see prompt.ts).
+ *
+ * chunk-v2: every model fills every chunk slot; a model that finishes early gets
+ * the extension instruction for its remaining slots, so the chunk count and the
+ * SOL betting cutoff are the same schedule for all competitors.
+ */
+export const CHUNK_POLICY_VERSION = "chunk-v2";
 
 export const DEFAULT_CHUNK_POLICY: ChunkPolicy = {
   maxTokensPerChunk: 1536,

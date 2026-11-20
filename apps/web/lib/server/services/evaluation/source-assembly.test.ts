@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assembleFinalSource,
   assessPartialSource,
   definesEntryPoint,
   joinChunks,
@@ -49,6 +50,96 @@ describe("joinChunks", () => {
 
   it("returns empty for no chunks", () => {
     expect(joinChunks([])).toBe("");
+  });
+});
+
+describe("assembleFinalSource", () => {
+  const COMPLETE =
+    "function drawFrame(t, ctx) {\n  ctx.fillRect(0, 0, 1, 1);\n}";
+  const EXTENSION =
+    "const __earlier1 = drawFrame;\ndrawFrame = function (t, ctx, canvas) {";
+
+  it("joins normally when the full source parses", () => {
+    const { source, truncatedToChunk } = assembleFinalSource(
+      [
+        {
+          chunkIndex: 0,
+          source: "function drawFrame(t) {",
+          finishReason: "length",
+        },
+        { chunkIndex: 1, source: "}", finishReason: "stop" },
+      ],
+      "drawFrame",
+    );
+
+    expect(source).toBe("function drawFrame(t) {\n}");
+    expect(truncatedToChunk).toBeNull();
+  });
+
+  it("falls back to the last finished prefix when a layer is cut off", () => {
+    // Without this the model forfeits the gate on a truncated decoration,
+    // having already written a renderer that would have passed.
+    const { source, truncatedToChunk } = assembleFinalSource(
+      [
+        { chunkIndex: 0, source: COMPLETE, finishReason: "stop" },
+        { chunkIndex: 1, source: EXTENSION, finishReason: "length" },
+      ],
+      "drawFrame",
+    );
+
+    expect(source).toBe(COMPLETE);
+    expect(truncatedToChunk).toBe(0);
+  });
+
+  it("keeps a finished later layer and drops only the truncated one", () => {
+    const layer2 = [
+      "const __earlier2 = drawFrame;",
+      "drawFrame = function (t, ctx, canvas) {",
+      "  __earlier2(t, ctx, canvas);",
+      "};",
+    ].join("\n");
+
+    const { source, truncatedToChunk } = assembleFinalSource(
+      [
+        { chunkIndex: 0, source: COMPLETE, finishReason: "stop" },
+        {
+          chunkIndex: 1,
+          // A complete first layer: redefines the entry point and closes.
+          source:
+            "const __earlier1 = drawFrame;\ndrawFrame = function (t, ctx, canvas) {\n  __earlier1(t, ctx, canvas);\n};",
+          finishReason: "stop",
+        },
+        { chunkIndex: 2, source: layer2, finishReason: "stop" },
+        { chunkIndex: 3, source: EXTENSION, finishReason: "length" },
+      ],
+      "drawFrame",
+    );
+
+    expect(truncatedToChunk).toBe(2);
+    expect(source).toContain("__earlier2");
+  });
+
+  it("never promotes a partial chunk that the model did not finish", () => {
+    // The ordinary truncated-continuation case: nothing was ever complete, so
+    // the full source is returned unchanged and the gate decides as usual.
+    const { source, truncatedToChunk } = assembleFinalSource(
+      [
+        {
+          chunkIndex: 0,
+          source: "function drawFrame(t) {",
+          finishReason: "length",
+        },
+        {
+          chunkIndex: 1,
+          source: "  ctx.fillRect(0, 0, 1, 1);",
+          finishReason: "length",
+        },
+      ],
+      "drawFrame",
+    );
+
+    expect(truncatedToChunk).toBeNull();
+    expect(source).toBe("function drawFrame(t) {\n  ctx.fillRect(0, 0, 1, 1);");
   });
 });
 

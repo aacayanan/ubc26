@@ -16,12 +16,16 @@
  *   * a JavaScript brief is *published* — a round cannot be opened against a
  *     draft, and publishing one is `npm run briefs:validate`'s job because it
  *     has to render the reference implementation first;
- *   * RENDER_SANDBOX_IMAGE is digest-pinned and INTERNAL_JOB_SECRET is set.
+ *   * RENDER_SANDBOX_IMAGE is digest-pinned and INTERNAL_JOB_SECRET is set;
+ *   * SOLANA_TREASURY_KEYPAIR is set — every round wagers Devnet SOL, and the
+ *     round row records the treasury address it pays into.
  */
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 import { createClient } from "@supabase/supabase-js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -82,6 +86,7 @@ const SUPABASE_URL =
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const JOB_SECRET = process.env.INTERNAL_JOB_SECRET;
 const SANDBOX_IMAGE = process.env.RENDER_SANDBOX_IMAGE;
+const TREASURY_KEYPAIR = process.env.SOLANA_TREASURY_KEYPAIR;
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   fail("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
@@ -189,25 +194,57 @@ async function pickActor() {
   return data[0].id;
 }
 
+/** The public treasury address — the only part of the keypair this script needs. */
+function treasuryAddress() {
+  if (!TREASURY_KEYPAIR || TREASURY_KEYPAIR.trim() === "") {
+    fail(
+      "SOLANA_TREASURY_KEYPAIR is not set.",
+      "Every round wagers Devnet SOL and records the treasury it pays into. " +
+        "Add the keypair to apps/web/.env.local (see .env.example).",
+    );
+  }
+  const raw = TREASURY_KEYPAIR.trim();
+  try {
+    const keypair = raw.startsWith("[")
+      ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw)))
+      : Keypair.fromSecretKey(bs58.decode(raw));
+    return keypair.publicKey.toBase58();
+  } catch {
+    // Never echo the value: it is a private key.
+    fail("SOLANA_TREASURY_KEYPAIR is not a valid Solana secret key.");
+  }
+}
+
+/** Mirror the admin route's policy so a dev round matches a real one. */
+function tokenBudget() {
+  const perChunk = Number.parseInt(process.env.CHUNK_MAX_TOKENS ?? "1536", 10);
+  const chunks = Number.parseInt(process.env.CHUNK_MAX_CHUNKS ?? "4", 10);
+  return perChunk * chunks;
+}
+
 async function createLockedRound(brief, lineup, actorId) {
   const slug = `dev-${new Date()
     .toISOString()
     .replace(/[^0-9]/g, "")
     .slice(0, 14)}`;
-  const opensAt = new Date(Date.now() - 1000).toISOString();
   // A long-ish window so a human can actually stake through the UI; the normal
   // path locks immediately and never needs it.
   const deadline = new Date(
     Date.now() + (OPEN_ONLY ? 30 : 5) * 60 * 1000,
   ).toISOString();
 
-  const { data: round, error } = await db.rpc("create_competition", {
+  // Every round is a Devnet SOL round now, so it must carry its wagering rules
+  // from the start: they freeze the moment the RPC opens the round.
+  const { data: round, error } = await db.rpc("create_sol_competition", {
     p_slug: slug,
     p_challenge_id: brief.id,
     p_model_ids: lineup.map((model) => model.id),
-    p_prediction_opens_at: opensAt,
     p_prediction_deadline: deadline,
     p_created_by: actorId,
+    p_treasury_address: treasuryAddress(),
+    p_token_budget_per_model: tokenBudget(),
+    p_fee_bps: 500,
+    p_stall_timeout_seconds: 120,
   });
 
   if (error) fail(`Could not create the round: ${error.message}`);
