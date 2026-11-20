@@ -12,10 +12,10 @@ Repo state: monorepo scaffolded 2026-11-18, M0 done and M1 accounts/shell done (
 
 ## Non-negotiable constraints
 
-- **No real-money wagering, deposits, or payouts** without an explicit product decision. The parimutuel pool redistributes non-redeemable points only.
+- **Devnet SOL only (revised 2026-11-20).** SOL rounds wager valueless Devnet test SOL. Mainnet transfers and real-money wagering, deposits or payouts stay blocked pending legal and security review. The Solana module refuses any non-Devnet RPC by genesis hash.
 - **Never execute LLM-generated code on the application server.** All evaluation runs in an isolated sandbox with CPU/memory/time limits and no network/filesystem access.
 - **Browser-rendered generated code is quarantined.** A viewer-facing render runs in an iframe with `sandbox="allow-scripts"` and **never** `allow-same-origin`, `srcdoc` with a CSP of `connect-src 'none'`, and no access to the app origin, cookies or storage.
-- **The two clocks hold.** Stakes close before any render exists; the crowd vote opens only after `LOCKED`. Never let a vote or a visible outcome precede the betting deadline.
+- **The windows hold (revised 2026-11-20).** SOL rounds: ante until `prediction_deadline`; live wagers during generation; betting closes before any output past the first model's 75% token mark, any finish/failure, final render, gate result or verdict is visible ("close, then publish"). Votes and judge verdicts are refused until betting closes. The crowd vote never moves SOL; tied winners split by dead heat. Points rounds keep the original two clocks.
 - **API credentials stay server-side** — LLM provider keys, DB credentials, and any evaluator secrets must never reach the client bundle.
 - **Solana Devnet** for all blockchain interaction during development.
 - Consumer UX first: users must not need blockchain knowledge to use the product.

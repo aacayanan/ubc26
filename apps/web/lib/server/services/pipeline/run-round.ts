@@ -22,6 +22,7 @@ import {
   type RoundRunInputs,
 } from "@/lib/server/services/pipeline/round-inputs";
 import { generateChunks } from "@/lib/server/services/llm/generate-chunks";
+import { BettingMeter } from "@/lib/server/services/wagering/betting";
 import {
   getActiveJudge,
   type LLMModelRecord,
@@ -163,17 +164,57 @@ export async function runRoundPipeline(
   // the sandbox queues.
   const runContainer = createLimiter(1);
 
-  const generated = await Promise.all(
-    inputs.participants.map((participant) =>
-      generateOneModel({
-        inputs,
-        participant,
-        policy,
-        correlationId,
-        runContainer,
-      }),
-    ),
+  // SOL rounds: live betting is open while the models generate. The meter
+  // closes it — before the triggering output is revealed — when the first
+  // model reaches the cutoff share of its token budget, or finishes, or fails.
+  // For points rounds it is inert.
+  const meter = await BettingMeter.forRound(
+    roundId,
+    inputs.participants.map((participant) => participant.id),
+    supabase,
   );
+
+  // A resumed run cannot trust an in-memory meter that restarted at zero, so a
+  // round that was already RUNNING closes betting before generating anything.
+  if (inputs.status !== "LOCKED" && meter.active) {
+    await meter.close("admin");
+  }
+
+  const stallTimer = setInterval(() => {
+    meter.checkStall().catch((error) => {
+      logger.warn("betting.stall_check.failed", {
+        correlationId,
+        roundId,
+        errorName: error instanceof Error ? error.name : typeof error,
+      });
+    });
+  }, 5_000);
+
+  let generated: GeneratedModel[];
+  try {
+    generated = await Promise.all(
+      inputs.participants.map((participant) =>
+        generateOneModel({
+          inputs,
+          participant,
+          policy,
+          correlationId,
+          runContainer,
+          meter,
+        }),
+      ),
+    );
+  } catch (error) {
+    // Never leave betting open on a broken run.
+    await meter.close("model_failed").catch(() => undefined);
+    throw error;
+  } finally {
+    clearInterval(stallTimer);
+  }
+
+  // Every model has stopped generating. Whatever closed betting, it is closed
+  // before a single final render, gate result or verdict exists.
+  await meter.close("all_models_stopped");
 
   // Render and judge one model at a time, in lineup order, so the sandbox work
   // is bounded and the finished renders appear in a predictable sequence.
@@ -223,6 +264,8 @@ interface RunOneModelParams {
   correlationId: string;
   /** Serializes sandbox work so only one Chromium container runs at a time. */
   runContainer: <T>(task: () => Promise<T>) => Promise<T>;
+  /** SOL rounds' betting cutoff; inert for points rounds. */
+  meter: BettingMeter;
 }
 
 /** What generation produced for one model, before render and judge. */
@@ -242,7 +285,8 @@ interface GeneratedModel {
 async function generateOneModel(
   params: RunOneModelParams,
 ): Promise<GeneratedModel> {
-  const { inputs, participant, policy, correlationId, runContainer } = params;
+  const { inputs, participant, policy, correlationId, runContainer, meter } =
+    params;
 
   const challenge = toGenerationChallenge(inputs.brief);
 
@@ -272,6 +316,8 @@ async function generateOneModel(
     challenge,
     policy,
     correlationId,
+    beforeReveal: (event) =>
+      meter.beforeReveal({ ...event, modelId: participant.id }),
     onChunk: async (chunk, fullSource) => {
       try {
         await runContainer(() =>

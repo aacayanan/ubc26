@@ -78,7 +78,7 @@ describe("buildGenerationMessages", () => {
   });
 
   it("exports a bump-able template version", () => {
-    expect(PROMPT_TEMPLATE_VERSION).toBe("render-v1");
+    expect(PROMPT_TEMPLATE_VERSION).toBe("render-v2");
   });
 });
 

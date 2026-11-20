@@ -91,7 +91,7 @@ function waitForPostgres() {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const probe = docker(
-      ["exec", CONTAINER, "pg_isready", "-U", PG_USER, "-d", PG_DB],
+      ["exec", CONTAINER, "pg_isready", "-h", "127.0.0.1", "-U", PG_USER, "-d", PG_DB],
       { allowFailure: true },
     );
     if (probe.status === 0) return;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
+import { SolRound } from "@/components/sol-round";
 import { LiveRoundPanel } from "@/components/live-round-panel";
 import { MarketBoard } from "@/components/market-board";
 import { describeDeadline } from "@/lib/countdown";
@@ -76,6 +77,49 @@ export default function CompetitionDetailPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    return () => {
+      active = false;
+    };
+  }, [roundId, reloadKey]);
+
+  // The initial round read is intentionally cheap, but the lifecycle changes
+  // while the SOL pool is polling. Keep the parent status current so the live
+  // surface mounts as soon as the ante window becomes live.
+  useEffect(() => {
+    if (!roundId) return;
+    let active = true;
+    const refreshStatus = async () => {
+      const response = await fetch(`/api/rounds/${roundId}/progress`, {
+        cache: "no-store",
+      });
+      if (!active || !response.ok) return;
+      const progress = (await response.json()) as { status?: string };
+      if (progress.status) {
+        setRound((current) =>
+          current ? { ...current, state: progress.status! } : current,
+        );
+      }
+    };
+    void refreshStatus();
+    const timer = window.setInterval(() => void refreshStatus(), 2_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [roundId]);
+
+  // SOL rounds (Devnet prototype) render the wagering view instead of the
+  // points stake form. Read from the pool endpoint, which every round has.
+  const [solMode, setSolMode] = useState(false);
+  useEffect(() => {
+    if (!roundId) return;
+    let active = true;
+    fetch(`/api/rounds/${roundId}/pool`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (active) setSolMode(body?.pool?.wageringMode === "devnet_sol");
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -308,7 +352,29 @@ export default function CompetitionDetailPage() {
         </Panel>
       )}
 
-      {isLive ? (
+      {solMode ? (
+        // SOL rounds carry their own wager flow (token meters, ante and live
+        // phases, pool, payouts); the points market board does not apply. The
+        // live show stays shared, so both modes replay the same renders.
+        <>
+          {isLive ? (
+            <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
+              {liveNote}
+            </p>
+          ) : null}
+          <SolRound
+            roundId={round.id}
+            status={round.state}
+            deadline={round.deadline}
+            models={round.models}
+          />
+          <LiveRoundPanel
+            roundId={round.id}
+            initialStatus={round.state}
+            className="mt-5"
+          />
+        </>
+      ) : isLive ? (
         <>
           <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
             {liveNote}

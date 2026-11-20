@@ -1,4 +1,117 @@
-# Solana integration scope (G1)
+# Solana integration scope
+
+> **2026-11-20 — product pivot: SOL-backed live parimutuel wagering (Devnet only).**
+> The section below, _SOL wagering prototype_, is the current shape. The G1
+> record after it (hash-only points commitments) is kept as history; where they
+> disagree, the 2026-11-20 section wins.
+
+## SOL wagering prototype (2026-11-20)
+
+**Devnet only, valueless test SOL.** Mainnet transfers and real-money wagering
+stay disabled until a documented legal review and an independent security
+review are complete. The code cannot reach Mainnet: every signing path first
+checks the RPC's genesis hash against Devnet's
+(`apps/web/lib/server/integrations/solana/connection.ts`), and RPC URLs naming
+mainnet or testnet are refused outright.
+
+### What a wager is
+
+One Solana transaction, so the money and the commitment are atomic:
+
+| Instruction        | Content                                                                     |
+| ------------------ | --------------------------------------------------------------------------- |
+| Compute-unit price | a tiny priority fee                                                         |
+| System transfer    | user wallet → round treasury, the wager amount in lamports                  |
+| Memo v2            | `aisd:v2:wager:<roundId>:<wagerId>:<commitment>`, the user listed as signer |
+
+`commitment = sha256("aisd:v2|roundId|wagerId|modelId|lamports|nonce")` — the
+memo never carries the pick or the nonce. The **operator** is the fee payer and
+therefore a **required signer**: the user signs with Phantom (sign only, never
+send), the server checks the signed bytes are exactly what it prepared,
+re-checks the betting window under the round row lock (`wager_reserve`), and
+only then co-signs and broadcasts. A wallet cannot broadcast a valid wager on its
+own, so a late wager is refused before any SOL moves.
+
+A wager counts only when it is **accepted**: the server re-reads the confirmed
+transaction from Devnet, checks the message bytes match the prepared ones, that
+it did not fail, and that the treasury balance grew by exactly the wager amount.
+Signing in Phantom, or even broadcasting, is not acceptance.
+
+### The windows
+
+1. **Ante** — `OPEN` until `prediction_deadline` (now the ante deadline). A
+   $5-equivalent ante, priced from the SOL/USD spot price at prepare time
+   (recorded with the wager as evidence; the lamport amount is authoritative).
+   One accepted ante per account per round. The ante is the first wager and the
+   ticket to live betting.
+2. **Live** — while the models generate (`RUNNING`, `betting_phase = live`).
+   Eligible accounts place more wagers on any model. Estimated multipliers move
+   with accepted wagers only.
+3. **Closed** — betting closes the moment the **first** model reaches 75% of its
+   output-token budget, or earlier if a model finishes or fails. The pipeline
+   checks each chunk **before** it is stored or previewed, so the close commits
+   before any output past the threshold is visible. An optional per-round stall
+   safeguard closes betting if generation stops producing chunks. Final renders,
+   gate results, judge verdicts and crowd votes are refused by the database until
+   betting is closed.
+
+A wager co-signed inside the window may confirm a few seconds after the close
+(bounded by its blockhash lifetime, ~60–90 s). It counts; the pool is finalized
+only once no wager is still confirming.
+
+### Settlement and payouts
+
+- Fee: `fee_bps` fixed per round at creation (default 5%), charged **only** on
+  rounds that pay winners.
+- Split: the net pool goes to backers of every model that conformed. One
+  conformer takes it all; several split it by **dead heat** (equal parts per
+  winning model, pro-rata within each). The crowd vote never moves SOL.
+- Full refund, no fee, when the round is void or cancelled, nobody conformed, or
+  nobody backed a winner.
+- Exact integer lamports, largest-remainder rounding: payouts + fee = gross pool,
+  to the lamport.
+- Payouts are a durable queue. A payout's signature and expiry are stored before
+  it is broadcast; an unclear payout is only rebuilt once the old signature is
+  provably dead, so it cannot be paid twice. If the treasury cannot cover a
+  round, the round's payouts are put on hold — nobody is paid partially.
+
+### What the chain proves — and what it does not
+
+| Claim                                                                          | Who guarantees it                                                             |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| This wallet paid X lamports to the treasury with this commitment, at this slot | **Chain** (transaction, signatures, balances)                                 |
+| The transfer and the commitment happened together                              | **Chain** (one atomic transaction)                                            |
+| The round, its ante deadline and rules were announced                          | Operator memo (`aisd:v2:round:…`) — operator attestation                      |
+| When and why betting closed                                                    | Operator memo (`aisd:v2:close:…`) — operator attestation                      |
+| The settlement result (winners, gross, fee, net, payout count)                 | Operator memo (`aisd:v2:settle:…`) — a **record**, not a payment              |
+| A winner was actually paid                                                     | **Chain** — the payout transfer, shown separately from the record             |
+| The deadlines were enforced                                                    | **Backend + database** (locked rows, co-signature); the chain only timestamps |
+| The models ran honestly and the judge was impartial                            | **Trusted backend** — not verifiable on-chain                                 |
+| The funds are held safely                                                      | **Trusted operator** — the treasury is an operator key, not a program         |
+
+**What users must trust AI Showdown to do:** run the models and the judge
+honestly; close betting by the stated rule and never co-sign after it; hold the
+pooled SOL in the treasury and not spend or lose it; send every payout and
+refund; compute the split correctly. Memo provides no escrow and enforces no
+payout. An Anchor escrow program (funds in program-owned accounts, user-claimed
+payouts, timeout refunds) is the custody upgrade that any real-value version
+would need — it would still not remove trust in the judge.
+
+**Devnet limits:** test SOL has no value; Devnet can be reset and history wiped;
+the public RPC rate-limits (use a dedicated Devnet RPC for the demo); the RPC
+airdrop is closed, so wallets are funded from https://faucet.solana.com.
+
+**Mainnet requires**, at minimum: gambling/wagering licensing review for every
+served jurisdiction, money-services / KYC / AML / sanctions obligations for a
+custodial operator, age and geographic restrictions, responsible-gambling
+controls, custody via HSM/MPC rather than an environment variable, and an
+independent security review (and audit, if a program is used). Devnet success
+proves the mechanics work; it does not show that handling real money is safe or
+legal.
+
+---
+
+# G1 record (2026-11-19, historical)
 
 **Decided 2026-11-19.** This record settles the one gated row in the
 [decisions log](../REQUIREMENTS.md#decisions-log): what the chain is used for,
