@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**AI Showdown** — a live visual showdown where LLMs are given a creative brief (a spinning donut, a pulsing reactor core) and write code that **renders**. The audience watches the code stream in chunks and the artifact take shape. **Conformance** (does it run, does it follow the brief) is decided by deterministic checks plus a vision judge model; **"best"** is decided by the crowd. Users stake points on a model _before_ the deadline via a **parimutuel pool** — sealed on-chain, so the prediction cannot be hindsight. Built for the UBC 2026 Hackathon, Track 03 (Consumer Applications), on Solana Devnet. Submission deadline: **November 20, 2026, 12:00 PM CST**.
+**AI Showdown** — a live visual showdown where LLMs are given a creative brief (a spinning donut, a pulsing reactor core) and write code that **renders**. The audience watches the code stream in chunks and the artifact take shape. **Conformance** (does it run, does it follow the brief) is decided by deterministic checks plus a vision judge model; **"best"** is decided by the crowd. Users stake points on a model _before_ the deadline via a **parimutuel pool** — a commitment hash recorded on-chain, so the record cannot be backdated. Built for the UBC 2026 Hackathon, Track 03 (Consumer Applications), on Solana Devnet. Submission deadline: **November 20, 2026, 12:00 PM CST**.
 
 **Pivot (2026-11-19):** this replaced the original plan of standardized Python coding challenges judged on accuracy/speed/code length. That format read as LeetCode homework. Speed and code-length categories are gone; challenges are now visual briefs. See the pivot notice at the top of `REQUIREMENTS.md`.
 
@@ -23,11 +23,19 @@ Repo state: monorepo scaffolded 2026-11-18, M0 done and M1 accounts/shell done (
 
 ## What Solana does vs. what it doesn't
 
-On-chain (Solana): prediction commitments (hashes), competition IDs and deadlines, deadline enforcement, verifiable prediction history, settlement/achievement records.
+Scope is decided (G1, 2026-11-19) — full record in
+`docs/solana-integration.md`. The transport is **SPL Memo transactions on
+Devnet**; there is no custom program.
 
-Off-chain (PostgreSQL): user data, generated code, test results, large datasets, private information.
+On-chain (Solana): prediction commitments (hashes), signed by the user's wallet;
+competition IDs and deadlines; a settlement record. These are **records**, not
+enforcement — the deadline is enforced by the database and the backend, and the
+chain only proves a commitment existed before it. Anchor with program-enforced
+deadlines is the documented upgrade path, not the current shape.
 
-Blockchain verification guarantees that commitments existed before the deadline and were not altered. It does **not** verify that model execution or scoring was honest — that still depends on the trusted backend. Document this distinction in any user-facing or judge-facing material.
+Off-chain (PostgreSQL): user data, generated code, test results, large datasets, private information, the commitment nonce, and the points ledger.
+
+Blockchain verification guarantees that commitments existed before the deadline and were not altered. It does **not** verify that model execution or scoring was honest, that the judge was impartial, or that a commitment backed a stake that actually counted in the pool — those still depend on the trusted backend. Devnet is disposable, so these are demo-grade guarantees. Document this distinction in any user-facing or judge-facing material.
 
 ## Accounts, wallets, and the join gate
 
@@ -52,7 +60,7 @@ Blockchain verification guarantees that commitments existed before the deadline 
 
 Rules that must hold in code:
 
-- Predictions accepted only in `OPEN`; late or duplicate submissions rejected at both API and (where possible) on-chain level.
+- Predictions accepted only in `OPEN`; late or duplicate submissions rejected at the API and database level. In the current memo-only scope the chain does **not** reject anything — it records a hash and proves its timing.
 - State transitions are one-directional and validated — no invalid jumps, no modifications to finalized (`SETTLED`/`ARCHIVED`) results.
 - Scoring runs idempotently — interrupted settlement must not double-score.
 - Defined behavior for: model API failure, execution failure, ties, all-models-failing, blockchain tx failure, interrupted settlement.
@@ -128,11 +136,14 @@ Public GitHub repo, architecture documentation + README, deployed working demo, 
 
 ## Open decisions (see REQUIREMENTS.md for full list)
 
-1. Solana scope (gated — decide before M5): Anchor program with commitments + deadline enforcement vs. lightweight tx records vs. full on-chain. Recommended: an on-chain points pool with stake commitments and a settlement record, not a full on-chain market.
-2. Final three competitor model IDs **and** the judge (vision) model ID on OpenRouter.
-3. Deployment host: Fly.io vs Railway vs Render (must run Docker and headless Chromium).
-4. Points formula: pot split plus fan-favorite award, and starter grants for new accounts. Demo rounds stay admin-triggered.
-5. Whether the crowd vote is weighted by stake or one-person-one-vote.
+1. Final three competitor model IDs **and** the judge (vision) model ID on OpenRouter.
+2. Deployment host: Fly.io vs Railway vs Render (must run Docker and headless Chromium).
+3. Points formula: pot split plus fan-favorite award, and starter grants for new accounts. Demo rounds stay admin-triggered.
+4. Whether the crowd vote is weighted by stake or one-person-one-vote.
+
+**Resolved:** Solana scope (G1) — lightweight user-signed SPL Memo commitments on
+Devnet, operator-signed round and settlement records, no custom program. Anchor
+is the post-submission upgrade. See `docs/solana-integration.md`.
 
 ## Known hazards of the pivot
 

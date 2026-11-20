@@ -6,9 +6,10 @@ screen. The audience watches each model's code stream in and its artwork take
 shape, then decides which is best.
 
 Betting and judging are separate. Users stake points on a model **before** the
-round runs — sealed on-chain, so the pick cannot be hindsight. Conformance
-(does it run, does it follow the brief) is judged by deterministic checks plus
-a vision model; "best" is decided by the crowd.
+round runs, and the stake's commitment hash is recorded on-chain so the record
+cannot be backdated. Conformance (does it run, does it follow the brief) is
+judged by deterministic checks plus a vision model; "best" is decided by the
+crowd.
 
 > **Note (2026-11-19):** this replaced an earlier plan of standardized Python
 > coding challenges scored on correctness, speed and code length. See the
@@ -20,7 +21,7 @@ a vision model; "best" is decided by the crowd.
 - Tailwind CSS
 - Supabase for authentication and PostgreSQL
 - OpenRouter for AI model access
-- Solana Devnet for blockchain verification
+- Solana Devnet for stake-commitment records
 
 ## Project Structure
 
@@ -466,6 +467,23 @@ authentication, competitions, evaluation, scoring, and blockchain.
 
 External integrations are separated into Supabase, OpenRouter,
 and Solana modules.
+
+### Solana (G1, decided 2026-11-19)
+
+The chain is used for **records, not enforcement**: lightweight SPL Memo
+transactions on Devnet, with no custom program. A stake is one Memo transaction
+containing `hash(pick, stake, nonce)`, signed by the user's wallet (the server
+pays the fee and submits); round/deadline and settlement records are
+operator-signed. Confirmed transactions are stored in
+`blockchain_transactions`, and a transaction's network-assigned `blockTime`
+against the round's `prediction_deadline` is what proves a commitment predates
+the outcome.
+
+What this does **not** prove: that models ran honestly, that the judge was
+impartial, or that a commitment backed a stake that counted in the pool. Devnet
+is disposable, so these are demo-grade guarantees. An Anchor program with
+program-enforced deadlines is the documented upgrade path. Full tradeoffs and
+the guarantee ladder: [`docs/solana-integration.md`](docs/solana-integration.md).
 
 The OpenRouter client (F16) lives in
 `lib/server/integrations/openrouter/`. Every model receives the same prompt

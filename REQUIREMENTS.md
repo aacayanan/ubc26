@@ -47,7 +47,7 @@ free point. The two clocks below are the rule that makes this coherent.
 | **Prediction mechanic** | **Parimutuel points pool** on the conformance outcome: stake points on a model before the round runs; the pot splits proportionally among backers of the winner. Points only, non-redeemable                                                                                 | **Locked** |
 | **Renderer (MVP)**      | Model writes **three.js / Canvas** code. Container renders frames with headless Chromium for the judge; the viewer plays the same code live in a sandboxed iframe. **Blender is a flagged, later challenge type** — headless Blender render times do not fit the demo budget | **Locked** |
 | **Live presentation**   | Chunked generation with a per-chunk token cap; each finished chunk renders, then generation continues. Code is visible while it is written                                                                                                                                   | **Locked** |
-| Solana scope            | Deferred — commitments (G1) is the recommended shape: on-chain pool + commitment hashes + settlement record                                                                                                                                                                  | **Gated**  |
+| **Solana scope**        | **G1 — lightweight SPL Memo transactions on Devnet: user-signed, hash-only stake commitments; operator-signed round and settlement records; no custom program. Anchor is the post-submission upgrade. See [`docs/solana-integration.md`](docs/solana-integration.md)**       | **Locked** |
 | Frontend stack          | Next.js (TypeScript) + Tailwind                                                                                                                                                                                                                                              | **Locked** |
 | App packaging           | Production Dockerfile at repo root (Next.js standalone output); deploy host still open                                                                                                                                                                                       | **Locked** |
 
@@ -57,13 +57,19 @@ This is what keeps prediction meaningful.
 
 1. **Betting window** — `OPEN` until `prediction_deadline`. Users stake points
    on a model. Each stake is committed on-chain as
-   `hash(pick, stake, nonce)` (F20). Nobody has seen a render yet.
+   `hash(pick, stake, nonce)` (F20; until F20 lands, `commitment_hash` is stored
+   off-chain only, and a direct client insert can still write one with no stake
+   amount). Nobody has seen a render yet.
 2. **Reveal and vote** — at the deadline the round locks and runs. Only then
    do renders exist and the crowd vote opens.
 
-A prediction placed after the outcome is visible is provably impossible: the
-on-chain commitment predates the deadline. That property is the reason the
-prediction mechanic is worth keeping, and it is the thing to say on camera.
+A **commitment** placed after the outcome is visible is provably impossible: the
+on-chain hash predates the deadline, so it cannot be backdated. Note the precise
+claim — the chain proves _a hash existed in time_, not _which model it names_.
+Tying the hash to a pick is the backer's disclosure (see the guarantee ladder in
+[`docs/solana-integration.md`](docs/solana-integration.md)). That timing property
+is the reason the prediction mechanic is worth keeping, and it is the thing to
+say on camera.
 
 **Internal invalidation.** While the round is running, the safety rail is the
 **encrypted order book**, not the frontend. Stakes are submitted encrypted
@@ -236,19 +242,35 @@ categories).
   vote per funded account per round; tallies into the fan-favorite result that
   F18 settles. Voting never affects the conformance outcome.
 
-### M5 — Solana Integration (scope gated)
+### M5 — Solana Integration
 
-- G1. **Decide scope** before this milestone. Recommended: commitments on the
-  pool (stake hashes), round deadlines, and settlement records — not a
-  full on-chain market.
-- F20. Stake commitments on Devnet: `hash(pick, stake, nonce)` per stake,
-  verify-on-demand for linked wallets.
-- F21. Record round IDs and deadlines on-chain.
-- F22. Settlement/achievement records on-chain (pot size, payout distribution).
-- F23. Honest guarantees documentation: the chain proves a stake existed
-  before the deadline and paid out as recorded. It does **not** prove the
-  models ran honestly or that the judge was impartial — the backend is still
-  trusted.
+- G1. **Scope decided (2026-11-19)**: lightweight **SPL Memo transactions on
+  Devnet** — no custom program, no Anchor toolchain. The **stake memo is signed
+  by the user's wallet** (server pays the fee and submits); round/deadline and
+  settlement memos are operator-signed because the operator owns those actions.
+  Memos carry `hash(pick, stake, nonce)` only, never the pick. Anchor remains the
+  documented upgrade path. Tradeoffs, the guarantee ladder, and exactly what is
+  and is not proven on-chain live in
+  [`docs/solana-integration.md`](docs/solana-integration.md). **G1 complete
+  (2026-11-19); M5 implementation is F20–F23.**
+- F20. Stake commitments on Devnet: a user-signed Memo transaction per stake
+  carrying `hash(pick, stake, nonce)`; the nonce stays off-chain in
+  `blockchain_transactions.payload`. Verify-on-demand for wallet accounts.
+  **Blocked until a Sign-in-with-Solana account gets a `wallets` row** — without
+  one, `funded` is false and `place_stake` refuses the account, so there is
+  nothing to sign. Also owns making `predictions.commitment_hash` immutable
+  outside `OPEN` and revoking the direct `predictions` insert grant, so
+  `place_stake` is the only write path.
+- F21. Record round IDs and deadlines on-chain as operator-signed Memo
+  transactions, retry-safe via `blockchain_transactions.idempotency_key`.
+- F22. Record settlement on-chain as an operator-signed Memo transaction (pot
+  size, winning model, backer count). Points only — no payouts, no tokens.
+- F23. Honest guarantees documentation: the chain proves a stake commitment
+  existed before the deadline and was not altered. It does **not** prove the
+  models ran honestly, that the judge was impartial, or that a commitment
+  backed a stake actually in the pool — the backend is still trusted. Source
+  text: the guarantee ladder and non-guarantees in
+  [`docs/solana-integration.md`](docs/solana-integration.md).
 
 ### M6 — Leaderboards & History (Priority 1)
 
@@ -328,12 +350,14 @@ Anything not listed above is out of scope for the submission.
 
 ## Remaining Open Items
 
-1. **G1 — Solana scope** (blocks M5; decide before M5 starts).
-2. Final three competitor model IDs, plus the judge model ID (vision-capable),
+1. Final three competitor model IDs, plus the judge model ID (vision-capable),
    on OpenRouter.
-3. Deployment host: Fly.io vs Railway vs Render (all support the Docker
+2. Deployment host: Fly.io vs Railway vs Render (all support the Docker
    sandbox requirement; headless Chromium adds memory).
-4. Points formula: pot split plus fan-favorite award, and starter point
+3. Points formula: pot split plus fan-favorite award, and starter point
    grants for new accounts.
-5. Round cadence for the demo (admin-triggered, as before).
-6. Whether the crowd vote is weighted by stake or one-person-one-vote.
+4. Round cadence for the demo (admin-triggered, as before).
+5. Whether the crowd vote is weighted by stake or one-person-one-vote.
+
+**Resolved:** G1 (Solana scope) — decided 2026-11-19, see
+[`docs/solana-integration.md`](docs/solana-integration.md).
