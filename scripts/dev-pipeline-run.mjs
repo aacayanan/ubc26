@@ -41,6 +41,12 @@ const ROUND_ARG = (() => {
   const index = process.argv.indexOf("--round");
   return index >= 0 ? process.argv[index + 1] : null;
 })();
+// Pick the brief by slug (isometric-donut, pulsing-reactor-core, light-tunnel).
+// Without it, the first published brief alphabetically is used.
+const BRIEF_ARG = (() => {
+  const index = process.argv.indexOf("--brief");
+  return index >= 0 ? process.argv[index + 1] : null;
+})();
 
 function loadEnvFile(path) {
   let text;
@@ -118,17 +124,25 @@ async function seatJudge() {
 }
 
 async function pickBrief() {
-  const { data, error } = await db
+  let query = db
     .from("challenges")
     .select("id, slug, version")
     .eq("language", "javascript")
-    .eq("status", "published")
-    .order("slug")
-    .limit(1);
+    .eq("status", "published");
+
+  if (BRIEF_ARG) query = query.eq("slug", BRIEF_ARG);
+
+  const { data, error } = await query.order("slug").limit(1);
 
   if (error) fail(`Could not read briefs: ${error.message}`);
 
   if (!data || data.length === 0) {
+    if (BRIEF_ARG) {
+      fail(
+        `No published JavaScript brief with slug "${BRIEF_ARG}".`,
+        "Run `npm run briefs:validate` to publish the seeded briefs, or check the slug.",
+      );
+    }
     fail(
       "No published JavaScript brief. A round cannot open against a draft.",
       "Run `npm run briefs:validate` first — it renders the reference impl and publishes it.",
