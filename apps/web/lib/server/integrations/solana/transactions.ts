@@ -304,6 +304,47 @@ export async function verifyLandedWager(input: {
   return { ok: true, reason: null, ...base };
 }
 
+/** The memo texts and block time of one transaction, read back from Devnet. */
+export async function readTransactionMemos(
+  connection: Connection,
+  signature: string,
+): Promise<{
+  found: boolean;
+  failed: boolean;
+  memos: string[];
+  signers: string[];
+  blockTime: string | null;
+}> {
+  const tx = await connection.getTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  if (!tx || !tx.meta) {
+    return {
+      found: false,
+      failed: false,
+      memos: [],
+      signers: [],
+      blockTime: null,
+    };
+  }
+  const message = tx.transaction.message;
+  const keys = message.staticAccountKeys;
+  return {
+    found: true,
+    failed: tx.meta.err !== null,
+    memos: message.compiledInstructions
+      .filter((ix) => keys[ix.programIdIndex]?.equals(MEMO_PROGRAM_ID))
+      .map((ix) => Buffer.from(ix.data).toString("utf8")),
+    signers: keys
+      .slice(0, message.header.numRequiredSignatures)
+      .map((key) => key.toBase58()),
+    blockTime: tx.blockTime
+      ? new Date(tx.blockTime * 1000).toISOString()
+      : null,
+  };
+}
+
 /** An operator-signed memo (round open, betting close, settlement record). */
 export async function buildOperatorMemo(input: {
   connection: Connection;

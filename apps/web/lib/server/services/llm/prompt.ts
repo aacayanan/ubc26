@@ -15,7 +15,7 @@ import type { ChatMessage } from "@/lib/server/integrations/openrouter/client";
  * reproduced even after this file is edited.
  */
 
-export const PROMPT_TEMPLATE_VERSION = "render-v2";
+export const PROMPT_TEMPLATE_VERSION = "render-v3";
 
 /**
  * Mirrors the render harness' own cap (`sandbox/render/harness.mjs`).
@@ -178,12 +178,69 @@ export const FINAL_CHUNK_INSTRUCTION = [
   "Do not repeat any code you already wrote. Do not add prose or code fences.",
 ].join("\n");
 
+/**
+ * The instruction for a model that is already *done* but still has chunks left.
+ *
+ * Models do not spend a fixed number of replies. One will answer the whole brief
+ * in a single chunk and return `finish_reason: stop`, while two rivals keep
+ * writing. Left alone that asymmetry is not just cosmetic: the chunk counter
+ * reads "1 of 4" for one model and "4 of 4" for the others, and — because a
+ * finished model closes live betting (F7/F11) — the early one ends the betting
+ * window while its rivals are still on their first chunk.
+ *
+ * So every model fills every chunk slot. For a model that already produced a
+ * complete renderer, the remaining slots ask it to *layer more onto the scene*
+ * rather than to continue a function that has already been closed.
+ *
+ * The layering idiom is spelled out for two reasons. `drawFrame` is already a
+ * `function` declaration, so the natural-looking `function drawFrame(...)` a
+ * model would write is hoisted and replaces the original *before* anything can
+ * capture it — the scene would call itself forever. And the captured binding is
+ * named per chunk, because two chunks both declaring `const __earlier` would be
+ * a redeclaration error in the same script scope.
+ *
+ * This works because the render harness looks `window[entryPoint]` up at call
+ * time (see `sandbox/render/harness.mjs`): reassigning the entry point is the
+ * one way appended code can change what is drawn.
+ */
+export function extensionInstruction(
+  entryPoint: string,
+  chunkIndex: number,
+): string {
+  const capture = `__earlier${chunkIndex}`;
+  return [
+    "You are continuing the same scene from the previous reply.",
+    "The code so far already defines a complete, working renderer. Do not rewrite, repeat or reformat it.",
+    "Reply with ONLY code to append to the end of the file, starting exactly where the previous reply stopped.",
+    "Do not add prose, comments about this instruction, or code fences.",
+    "",
+    "Make the scene richer — more detail, more motion, more lighting, depth or texture — and make",
+    "that new detail render by layering a new definition over the existing one, in exactly this shape:",
+    "",
+    `  const ${capture} = ${entryPoint};`,
+    `  ${entryPoint} = function (t, ctx, canvas) {`,
+    `    ${capture}(t, ctx, canvas);`,
+    "    // ... the additional drawing goes here",
+    "  };",
+    "",
+    `Use an assignment (\`${entryPoint} = function ...\`). Do not write a second`,
+    `\`function ${entryPoint}(...)\` declaration: function declarations are hoisted, so it would replace the`,
+    "original before it could be captured and the scene would call itself forever.",
+  ].join("\n");
+}
+
 export interface ChunkGenerationInput {
   challenge: GenerationChallenge;
   /** Code accumulated from the chunks before this one. Empty for chunk 0. */
   codeSoFar: string;
   chunkIndex: number;
   isFinalChunk: boolean;
+  /**
+   * True when `codeSoFar` is already a complete renderer — the model finished
+   * early. The chunk is then an extension (see `extensionInstruction`) rather
+   * than a continuation.
+   */
+  completeSoFar: boolean;
 }
 
 /**
@@ -193,16 +250,25 @@ export interface ChunkGenerationInput {
  * how a model is asked, never what it is asked. Later chunks keep the same
  * system prompt and brief (so the constraints are still in front of the model)
  * and append the code so far.
+ *
+ * A model that already finished has no "remaining code" and no next piece to
+ * continue — asking either would get a confused reply or a re-emitted function.
+ * Its remaining chunks get the extension instruction instead, so every model
+ * fills the same number of slots and the chunk counter and betting cutoff see
+ * one schedule rather than three.
  */
 export function buildChunkMessages(input: ChunkGenerationInput): ChatMessage[] {
-  const { challenge, codeSoFar, chunkIndex, isFinalChunk } = input;
+  const { challenge, codeSoFar, chunkIndex, isFinalChunk, completeSoFar } =
+    input;
 
   const base = buildGenerationMessages(challenge);
   if (chunkIndex === 0) return base;
 
-  const instruction = isFinalChunk
-    ? FINAL_CHUNK_INSTRUCTION
-    : CONTINUATION_INSTRUCTION;
+  const instruction = completeSoFar
+    ? extensionInstruction(challenge.entryPoint, chunkIndex)
+    : isFinalChunk
+      ? FINAL_CHUNK_INSTRUCTION
+      : CONTINUATION_INSTRUCTION;
 
   return [
     ...base,

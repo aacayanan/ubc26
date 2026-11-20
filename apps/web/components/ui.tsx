@@ -344,3 +344,73 @@ export function Readout({
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * RoundBento — a round's pre-lock statistics as an instrument grid.
+ * ------------------------------------------------------------------ */
+
+/**
+ * One stat tile: an instrument label, a readout, a quiet note. The label is
+ * the React key, so it must be unique within one grid.
+ */
+export interface BentoStat {
+  label: string;
+  value: ReactNode;
+  /** A small mono unit riding after the value ("SOL", "%", "tokens"). */
+  suffix?: string;
+  /** A quiet mono line pinned to the tile's bottom edge. */
+  note?: string;
+}
+
+/**
+ * The bento: a round's statistics, shown while the round is still open.
+ *
+ * A stack of equal full-width slabs made every statistic look equally
+ * important and none of them findable — a viewer had to read paragraphs to
+ * find one number. The grid gives each statistic a fixed instrument cell so a
+ * viewer scans a row instead. Tiles use the nested-data material (12px radius,
+ * hairline, 1.5% fill), deliberately lighter than a panel: the market board is
+ * the exhibit, these are the readings around it.
+ *
+ * The caller decides when the grid exists — the product's rule is that these
+ * statistics appear before the round closes and vanish the moment it locks.
+ * The grid is a definition list because every tile is a term and its reading.
+ */
+export function RoundBento({
+  stats,
+  className,
+}: {
+  stats: BentoStat[];
+  className?: string;
+}) {
+  return (
+    <dl
+      className={cx(
+        "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4",
+        className,
+      )}
+    >
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="flex min-w-0 flex-col rounded-xl border border-hairline bg-white/[0.015] px-4 py-3.5"
+        >
+          <dt className="t-label text-[0.5625rem] text-faint">{stat.label}</dt>
+          <dd className="t-num mt-2 text-[1.375rem] leading-none break-words text-ink">
+            {stat.value}
+            {stat.suffix ? (
+              <span className="ml-1 text-[0.6875rem] text-muted">
+                {stat.suffix}
+              </span>
+            ) : null}
+          </dd>
+          {stat.note ? (
+            <dd className="t-mono mt-auto pt-3.5 text-[0.5625rem] leading-relaxed text-faint">
+              {stat.note}
+            </dd>
+          ) : null}
+        </div>
+      ))}
+    </dl>
+  );
+}

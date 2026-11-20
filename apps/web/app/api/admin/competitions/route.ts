@@ -17,6 +17,12 @@ interface CreateCompetitionBody {
   wageringMode?: unknown;
   feeBps?: unknown;
   stallTimeoutSeconds?: unknown;
+  /**
+   * The ladder step the round is priced at. Optional: the participants already
+   * name a tier, and the database derives the ante from it either way; sending
+   * a mismatching tier is refused rather than silently overridden.
+   */
+  tier?: unknown;
 }
 
 function isUuid(value: unknown): value is string {
@@ -105,6 +111,11 @@ export async function POST(request: Request) {
       const budget = policy.maxChunks * policy.maxTokensPerChunk;
       const treasury = getTreasuryAddress();
 
+      const tier = body.tier ?? null;
+      if (tier !== null && typeof tier !== "string") {
+        throw new ValidationError("tier must be a string when provided");
+      }
+
       const { data, error } = await supabase.rpc("create_sol_competition", {
         p_slug: name.trim(),
         p_challenge_id: body.challengeId,
@@ -114,6 +125,7 @@ export async function POST(request: Request) {
         p_treasury_address: treasury,
         p_token_budget_per_model: budget,
         p_fee_bps: feeBps,
+        p_tier: tier,
         p_stall_timeout_seconds: stall,
       });
       if (error) {

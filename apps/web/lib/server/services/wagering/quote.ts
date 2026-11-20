@@ -3,7 +3,8 @@ import "server-only";
 import { InternalError } from "@/lib/server/errors/app-error";
 
 /**
- * The $5-equivalent ante price (SOL prototype).
+ * Dollar-denominated prices (SOL prototype): the $5-equivalent ante and the
+ * $3 minimum live wager.
  *
  * Devnet SOL has no market. The ante is priced against the *mainnet* SOL/USD
  * spot price as a reference, so the demo behaves like the product would — but
@@ -58,7 +59,66 @@ async function fetchCoinbase(): Promise<string> {
   return amount;
 }
 
+export interface SolUsdPrice {
+  source: SolUsdQuote["source"];
+  /** USD per SOL, as a decimal string. */
+  price: string;
+  fetchedAt: string;
+}
+
+/**
+ * Cache window for the reference price. The pool endpoint is polled every few
+ * seconds to show the live minimum; one upstream read per window is plenty
+ * for a reference price and keeps the demo off Coinbase's rate limit.
+ */
+const PRICE_TTL_MS = 30_000;
+let cachedPrice: { value: SolUsdPrice; at: number } | null = null;
+
+/** The SOL/USD reference price, cached for PRICE_TTL_MS. */
+export async function getSolUsdPrice(): Promise<SolUsdPrice> {
+  if (cachedPrice && Date.now() - cachedPrice.at < PRICE_TTL_MS) {
+    return cachedPrice.value;
+  }
+  const value = await readSolUsdPrice();
+  cachedPrice = { value, at: Date.now() };
+  return value;
+}
+
 export async function quoteAnte(anteUsdCents: number): Promise<SolUsdQuote> {
+  const { source, price, fetchedAt } = await getSolUsdPrice();
+  return {
+    source,
+    price,
+    fetchedAt,
+    anteUsdCents,
+    lamports: lamportsForUsdCents(anteUsdCents, price).toString(),
+  };
+}
+
+/** Evidence stored with a live wager: the price its $ minimum was checked at. */
+export interface LiveMinimumQuote {
+  source: SolUsdQuote["source"];
+  price: string;
+  fetchedAt: string;
+  minUsdCents: number;
+  minLamports: string;
+}
+
+/** The current lamport minimum for a live wager of `minUsdCents`. */
+export async function quoteLiveMinimum(
+  minUsdCents: number,
+): Promise<LiveMinimumQuote> {
+  const { source, price, fetchedAt } = await getSolUsdPrice();
+  return {
+    source,
+    price,
+    fetchedAt,
+    minUsdCents,
+    minLamports: lamportsForUsdCents(minUsdCents, price).toString(),
+  };
+}
+
+async function readSolUsdPrice(): Promise<SolUsdPrice> {
   let price: string;
   let source: SolUsdQuote["source"];
   try {
@@ -78,11 +138,5 @@ export async function quoteAnte(anteUsdCents: number): Promise<SolUsdQuote> {
     source = "configured";
   }
 
-  return {
-    source,
-    price,
-    fetchedAt: new Date().toISOString(),
-    anteUsdCents,
-    lamports: lamportsForUsdCents(anteUsdCents, price).toString(),
-  };
+  return { source, price, fetchedAt: new Date().toISOString() };
 }

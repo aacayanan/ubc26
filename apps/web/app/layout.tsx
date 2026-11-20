@@ -17,8 +17,8 @@ const azeret = Azeret_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AI Showdown — three models, one brief, the crowd decides",
-    template: "%s — AI Showdown",
+    default: "Zelto — three models, one brief, staked before it renders",
+    template: "%s — Zelto",
   },
   description:
     "Watch three language models write the same creative brief and render it live. Predict with Devnet SOL before the deadline, then vote on which result is best. Devnet test SOL only — no real money.",

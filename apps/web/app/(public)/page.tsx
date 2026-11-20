@@ -77,14 +77,15 @@ export default function Home() {
         <div className="shell relative z-10 -mt-[8vh] pb-[14vh] text-center">
           <h1 className="t-display text-[clamp(2.7rem,6.6vw,5.4rem)]">
             <span className="block text-ink">Three models. One brief.</span>
-            <span className="mt-1 block text-muted">The crowd decides.</span>
+            <span className="mt-1 block text-muted">
+              Staked before it renders.
+            </span>
           </h1>
 
           <p className="t-body mx-auto mt-8 max-w-[52ch] text-[1.0625rem] text-muted">
             Three language models write the same creative brief and render it
-            live — code streaming in, the artifact taking shape. Predict with
-            Devnet SOL before the clock stops, then vote on which result is
-            best.
+            live — code streaming in, the artifact taking shape. Ante in Devnet
+            SOL before the clock stops, then wager live while they race.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -314,7 +315,8 @@ export default function Home() {
                   will conform to the brief. The transfer and a commitment hash
                   — {"hash(pick, amount, nonce)"} — land on Solana Devnet in one
                   transaction, so the hash provably existed before betting
-                  closed. Your pick stays private unless you disclose it.
+                  closed. Your pick stays private unless you disclose it, and
+                  you can check the whole thing yourself.
                 </p>
               </div>
               <div className="mt-8 flex items-center gap-3 border-t border-hairline pt-4">
@@ -335,13 +337,13 @@ export default function Home() {
                   <Status tone="violet">Locked</Status>
                 </div>
                 <h3 className="t-title mt-6 text-[1.375rem] text-ink">
-                  Then it runs, and the crowd decides.
+                  Then it runs, and conformance pays.
                 </h3>
                 <p className="t-body mt-3 text-sm text-muted">
-                  At the deadline the round locks. Three renders stream in, the
-                  checks and the judge rule on conformance, and the vote opens.
-                  The Devnet SOL pool splits pro-rata among everyone who wagered
-                  on the model that conformed.
+                  At the deadline the round locks and betting opens live. Three
+                  renders stream in, the checks and the judge rule on
+                  conformance, and the Devnet SOL pool splits pro-rata among
+                  everyone who wagered on the model that conformed.
                 </p>
               </div>
               <div className="mt-8 flex items-center gap-3 border-t border-hairline pt-4">
@@ -458,13 +460,21 @@ export default function Home() {
                   settlement are recorded too, and payouts are transfers anyone
                   can look up. Honest execution, honest judging and safe custody
                   of the pool are still claims we make as the operator, not
-                  things the chain can see. Devnet test SOL has no value.
+                  things the chain can see. Devnet test SOL has no value, and
+                  Devnet can be reset, so these are demo-grade records. You
+                  never need a wallet to watch or vote.
                 </p>
+                <Link
+                  href="/on-chain"
+                  className="link t-label mt-5 inline-block text-[0.625rem]"
+                >
+                  What the chain proves, and what it doesn&rsquo;t &rarr;
+                </Link>
               </div>
               <div className="min-w-0 lg:w-[320px]">
                 <div className="rounded-xl border border-hairline bg-void-2/70 p-4">
                   <p className="t-label text-[0.5625rem] text-faint">
-                    commitment
+                    commitment · example
                   </p>
                   <p className="t-mono mt-2 break-all text-[0.6875rem] leading-relaxed text-violet">
                     8f2c1a6b0d94e75f3ac0b61e
@@ -476,7 +486,7 @@ export default function Home() {
                       solana · devnet
                     </span>
                     <span className="t-mono text-[0.625rem] text-muted">
-                      confirmed
+                      synthetic
                     </span>
                   </div>
                 </div>

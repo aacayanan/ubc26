@@ -70,7 +70,7 @@ export function LoginForm() {
       }
       const { data, error } = await getBrowserSupabase().auth.signInWithWeb3({
         chain: "solana",
-        statement: "Sign in to AI Showdown to stake on rounds.",
+        statement: "Sign in to Zelto to stake on rounds.",
         wallet: window.solana,
       });
       if (error) throw error;

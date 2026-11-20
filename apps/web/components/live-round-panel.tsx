@@ -8,14 +8,7 @@ import type {
   LiveRoundProgress,
 } from "@ai-showdown/shared";
 import { LiveRenderFrame } from "@/components/live-render-frame";
-import {
-  Meter,
-  Panel,
-  Status,
-  cx,
-  roundLabel,
-  roundTone,
-} from "@/components/ui";
+import { Meter, Panel, Status, cx } from "@/components/ui";
 
 /**
  * The live watch surface for a round (F27).
@@ -42,17 +35,13 @@ const TERMINAL_STATUSES = new Set(["SETTLED", "VOIDED", "ARCHIVED"]);
 
 export function LiveRoundPanel({
   roundId,
-  initialStatus,
   className = "",
 }: {
   roundId: string;
-  /** The status the round page already loaded, so the first paint is right. */
-  initialStatus: string;
   /** Placement is the page's call — the round page runs this full width. */
   className?: string;
 }) {
   const [progress, setProgress] = useState<LiveRoundProgress | null>(null);
-  const [status, setStatus] = useState(initialStatus);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [everLoaded, setEverLoaded] = useState(false);
 
@@ -74,7 +63,6 @@ export function LiveRoundPanel({
       }
       const next = body as LiveRoundProgress;
       setProgress(next);
-      setStatus(next.status);
       setEverLoaded(true);
       setLoadError(null);
       return next.status;
@@ -128,13 +116,9 @@ export function LiveRoundPanel({
         <h2 id="live-heading" className="t-title text-[0.9375rem] text-ink">
           The round, live
         </h2>
+        {/* The phase badge that used to sit here is gone: the page header and the
+            betting sentence both state the phase already. */}
         <div className="flex items-center gap-3">
-          <Status
-            tone={roundTone(status)}
-            pulse={status === "RUNNING" || status === "EVALUATING"}
-          >
-            {roundLabel(status)}
-          </Status>
           <button
             type="button"
             onClick={() => void load()}

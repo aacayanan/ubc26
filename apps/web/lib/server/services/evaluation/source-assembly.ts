@@ -48,6 +48,50 @@ export function stripFences(text: string): string {
 }
 
 /**
+ * The source a round should judge, given every chunk a model wrote.
+ *
+ * Normally this is just the join. The exception is the extension path: a model
+ * that answered the whole brief in one reply has a complete renderer at chunk 0
+ * and spends its remaining slots layering more onto it. If one of those layers
+ * is cut off mid-function, the joined source no longer parses — and without
+ * this, that model would forfeit the deterministic gate on *decoration*, after
+ * having already written a renderer that would have passed.
+ *
+ * So when the full join does not parse, the source falls back to the longest
+ * prefix that the model itself declared finished (`finish_reason: stop`) and
+ * that parses. That is a real answer the model completed, not a fabrication; a
+ * partial chunk is never promoted. When no such prefix exists — the ordinary
+ * truncated-continuation case — the full join is returned unchanged and the
+ * gate decides, exactly as before.
+ */
+export function assembleFinalSource(
+  chunks: readonly StoredChunk[],
+  entryPoint: string,
+): { source: string; truncatedToChunk: number | null } {
+  const ordered = [...chunks].sort((a, b) => a.chunkIndex - b.chunkIndex);
+  const full = joinChunks(ordered);
+
+  if (chunks.length <= 1 || assessPartialSource(full, entryPoint).parsable) {
+    return { source: full, truncatedToChunk: null };
+  }
+
+  // Longest first: the closest the model got to its finished scene.
+  for (let end = ordered.length - 1; end >= 1; end -= 1) {
+    const last = ordered[end - 1];
+    const declaredComplete =
+      last.finishReason === null || last.finishReason === "stop";
+    if (!declaredComplete) continue;
+
+    const prefix = joinChunks(ordered.slice(0, end));
+    if (assessPartialSource(prefix, entryPoint).parsable) {
+      return { source: prefix, truncatedToChunk: last.chunkIndex };
+    }
+  }
+
+  return { source: full, truncatedToChunk: null };
+}
+
+/**
  * Join stored chunks into the source they describe.
  *
  * Sorted by index regardless of read order. A separator is inserted unless the

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Status } from "@/components/ui";
 
@@ -160,7 +161,10 @@ export function VerifyCommitment({ wagerId }: { wagerId: string }) {
             </a>
           </div>
           <p className="t-body mt-3 text-[0.6875rem] text-faint">
-            {result.scope}
+            {result.scope}{" "}
+            <Link href="/on-chain" className="link">
+              What&rsquo;s on-chain
+            </Link>
           </p>
         </>
       ) : null}

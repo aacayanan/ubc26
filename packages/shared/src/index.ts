@@ -264,6 +264,13 @@ export interface ChunkPolicy {
 export interface StoredChunk {
   chunkIndex: number;
   source: string;
+  /**
+   * The provider's `finish_reason` for this chunk. `stop` (or a null the
+   * provider omits on a clean finish) means the model itself declared this
+   * chunk's answer complete — which is what lets assembly prefer a prefix the
+   * model finished over a later chunk that was cut off.
+   */
+  finishReason?: string | null;
 }
 
 // ---------------------------------------------------------------------------
