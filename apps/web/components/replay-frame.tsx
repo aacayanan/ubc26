@@ -34,6 +34,8 @@ export function ReplayFrame({
   targetDurationMs,
   fallbackFrames,
   label,
+  autoPlay = false,
+  showControls = true,
 }: {
   source: string | null;
   entryPoint: string;
@@ -43,11 +45,26 @@ export function ReplayFrame({
   fallbackFrames: RenderedFrame[];
   /** Accessible name; typically the model name. */
   label: string;
+  /**
+   * Start playing as soon as the document is ready (F27). A live card has no
+   * room for a Play button — the render should be moving the moment the code
+   * compiles, the way the audience expects to find it.
+   */
+  autoPlay?: boolean;
+  /** Hide the play/scrub strip (live cards); the results replay keeps it. */
+  showControls?: boolean;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  // Which document the iframe is currently showing. Readiness belongs to a
+  // *specific* document: a new source is a new document, and inheriting the
+  // previous one's `ready` meant the first `render` post landed in a frame that
+  // had not booted yet. Comparing the flag's document against the live one
+  // derives that for free, with no effect needed to reset it.
+  const [docReady, setDocReady] = useState<{
+    doc: string;
+    failed: boolean;
+  } | null>(null);
+  const [playing, setPlaying] = useState(autoPlay);
   const [t, setT] = useState(0);
 
   const duration = Math.max(1, targetDurationMs);
@@ -57,6 +74,9 @@ export function ReplayFrame({
     return buildReplayDoc({ source, entryPoint, frameWidth, frameHeight });
   }, [source, entryPoint, frameWidth, frameHeight]);
 
+  const ready = docReady !== null && docReady.doc === doc && !docReady.failed;
+  const failed = docReady !== null && docReady.doc === doc && docReady.failed;
+
   // Receive frame/error/ready from the sandboxed document. Only trust messages
   // whose source is our own iframe's window.
   useEffect(() => {
@@ -64,12 +84,14 @@ export function ReplayFrame({
       if (event.source !== iframeRef.current?.contentWindow) return;
       const data = event.data as { type?: string } | null;
       if (!data) return;
-      if (data.type === "ready") setReady(true);
-      if (data.type === "error") setFailed(true);
+      // A message from the iframe names the document that sent it: the iframe
+      // only ever holds `doc`, so this cannot be attributed to a newer one.
+      if (data.type === "ready") setDocReady({ doc: doc ?? "", failed: false });
+      if (data.type === "error") setDocReady({ doc: doc ?? "", failed: true });
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [doc]);
 
   // Watchdog: if the document never reports ready (scripts blocked, srcdoc
   // unsupported, a browser that refuses the sandbox), fall back to the stored
@@ -77,7 +99,7 @@ export function ReplayFrame({
   // it does not cascade renders.
   useEffect(() => {
     if (!doc || ready || failed) return;
-    const id = setTimeout(() => setFailed(true), 4000);
+    const id = setTimeout(() => setDocReady({ doc, failed: true }), 4000);
     return () => clearTimeout(id);
   }, [doc, ready, failed]);
 
@@ -133,7 +155,7 @@ export function ReplayFrame({
         )}
       </div>
 
-      {doc && !failed ? (
+      {showControls && doc && !failed ? (
         <div className="mt-2 flex items-center gap-3">
           <button
             type="button"

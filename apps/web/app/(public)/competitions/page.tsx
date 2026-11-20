@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
-import { EmptyState, Meter, PageHeader, Panel, Status } from "@/components/ui";
+import {
+  EmptyState,
+  Meter,
+  PageHeader,
+  Panel,
+  Status,
+  roundLabel,
+  roundTone,
+} from "@/components/ui";
 import { formatMultiplier } from "@/lib/odds";
 
 interface OpenRound {
@@ -21,6 +29,88 @@ interface OpenRound {
     multiplier: number | null;
     share: number;
   }>;
+}
+
+/** A round that is running or being judged right now (F27). */
+interface LiveRound {
+  id: string;
+  title: string;
+  status: string;
+  models: string[];
+  done: number;
+  total: number;
+}
+
+/**
+ * What is happening right now, above what is still open (F27).
+ *
+ * A running round used to be invisible unless you kept its URL — the list only
+ * ever showed `OPEN`. This is the way back in. It renders nothing when no round
+ * is live, so an idle arena is not padded with placeholders.
+ */
+function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
+  if (rounds.length === 0) return null;
+
+  return (
+    <section aria-labelledby="live-strip-heading" className="mt-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2
+          id="live-strip-heading"
+          className="t-title text-[1.0625rem] text-ink"
+        >
+          Live now
+        </h2>
+        <span className="t-mono text-[0.625rem] text-faint">
+          watch it being written
+        </span>
+      </div>
+
+      <ul className="mt-4 grid gap-3">
+        {rounds.map((round) => (
+          <li key={round.id}>
+            <Link
+              href={`/competitions/${round.id}`}
+              className="panel panel-interactive flex flex-wrap items-center justify-between gap-x-8 gap-y-3 p-5"
+            >
+              <div className="min-w-0 flex-1">
+                <Status
+                  tone={roundTone(round.status)}
+                  pulse={
+                    round.status === "RUNNING" || round.status === "EVALUATING"
+                  }
+                >
+                  {roundLabel(round.status)}
+                </Status>
+                <h3 className="t-title mt-2.5 text-[1rem] text-ink">
+                  {round.title}
+                </h3>
+                <p className="t-mono mt-1.5 text-[0.6875rem] text-faint">
+                  {round.models.join(" · ")}
+                </p>
+              </div>
+
+              <div className="w-40 shrink-0">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="t-label text-[0.5625rem] text-faint">
+                    Models done
+                  </span>
+                  <span className="t-num text-[1.125rem] text-ink">
+                    {round.done}
+                    <span className="text-muted">/{round.total}</span>
+                  </span>
+                </div>
+                <Meter
+                  value={round.total > 0 ? round.done / round.total : 0}
+                  className="mt-2"
+                  label={`${round.done} of ${round.total} models have finished`}
+                />
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 /** One round on the list: preview, contenders, countdown, pool and odds. */
@@ -126,6 +216,7 @@ function RoundCard({
 
 export default function CompetitionsPage() {
   const [rounds, setRounds] = useState<OpenRound[]>([]);
+  const [live, setLive] = useState<LiveRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -147,25 +238,44 @@ export default function CompetitionsPage() {
         if (!response.ok) {
           throw new Error(body.error?.message ?? "Could not load rounds");
         }
-        return body.competitions as Array<{
-          id: string;
-          title: string;
-          challenge_preview: string;
-          models: string[];
-          deadline: string;
-          potential_points: number;
-          pool_capacity: number;
-          odds: Array<{
-            model_id: string;
-            model_name: string;
-            staked: number;
-            multiplier: number | null;
-            share: number;
-          }>;
-        }>;
+        return {
+          competitions: body.competitions as Array<{
+            id: string;
+            title: string;
+            challenge_preview: string;
+            models: string[];
+            deadline: string;
+            potential_points: number;
+            pool_capacity: number;
+            odds: Array<{
+              model_id: string;
+              model_name: string;
+              staked: number;
+              multiplier: number | null;
+              share: number;
+            }>;
+          }>,
+          live: (body.live ?? []) as Array<{
+            id: string;
+            title: string;
+            status: string;
+            models: Array<{ id: string; name: string }>;
+            progress: { done: number; total: number };
+          }>,
+        };
       })
-      .then((competitions) => {
+      .then(({ competitions, live: liveRounds }) => {
         if (!active) return;
+        setLive(
+          liveRounds.map((round) => ({
+            id: round.id,
+            title: round.title,
+            status: round.status,
+            models: round.models.map((model) => model.name),
+            done: round.progress.done,
+            total: round.progress.total,
+          })),
+        );
         setRounds(
           competitions.map((competition) => ({
             id: competition.id,
@@ -209,6 +319,8 @@ export default function CompetitionsPage() {
         title="Rounds"
         description="Each round is one creative brief and three models rendering it side by side. Staking closes at the deadline — after that, the crowd watches and votes."
       />
+
+      <LiveStrip rounds={live} />
 
       <div className="mt-10">
         {loading && rounds.length === 0 ? (

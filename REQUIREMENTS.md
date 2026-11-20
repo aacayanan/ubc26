@@ -332,9 +332,23 @@ categories).
   count toward rank, so decide whether that is intended; (d) confirmation
   that F18 writes one `score_events` row per participating user per settled
   round, including zero-point rows, so "Rounds" counts every settled stake.
+  F26's `/predictions` history is the natural source for (a)–(b): its per-stake
+  `state` already separates settled wins from losses.
 - F25. Historical model performance across rounds (conformance rate, crowd
   win rate).
-- F26. User prediction history (stake vs outcome).
+- F26. User prediction history (stake vs outcome). **Done (2026-11-20)** —
+  `/predictions` lists the signed-in account's conformance stakes via
+  `GET /api/stakes` (scoped by `requireUser()`, no user-id parameter) and
+  `listUserStakes` in `lib/server/services/scoring/stake-history.ts`. Each row
+  carries a derived `state` — `open` / `locked` / `running` / `settling` /
+  `won` / `lost` / `void` — separate from the settlement `outcome`, so the
+  betting clock, the reveal, a pending payout and a void are all
+  distinguishable. A round that ends `VOIDED`/`FAILED`/`CANCELLED` before
+  settlement writes an outcome reports `state = void` with no payout. Rows
+  past `OPEN` link to `/results/[id]` for the full explanation ("Why this
+  resolved"); open rounds show none, since a result page would be empty.
+  Points stay settled-only; an open stake shows what it reserved with no
+  payout.
 - F27. Live round progress: code streaming, renders appearing, odds moving.
 
 ### M7 — Deploy & Demo

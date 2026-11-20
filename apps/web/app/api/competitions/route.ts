@@ -1,17 +1,31 @@
 import { withApiErrorHandling } from "@/lib/server/http/api-error";
-import { getActiveCompetitions } from "@/lib/server/services/competitions/active-competitions";
+import {
+  getActiveCompetitions,
+  getLiveCompetitions,
+} from "@/lib/server/services/competitions/active-competitions";
 import { getServiceRoleSupabase } from "@/lib/server/integrations/supabase/admin";
 
 /**
- * GET /api/competitions — the open-round list (F9).
+ * GET /api/competitions — the open-round list and what is running (F9, F27).
  *
  * Public. Reads through the service role because the pot and the per-model split
  * are aggregates over other accounts' stakes, which RLS scopes to their owners;
  * only totals leave this handler.
+ *
+ * `live` is a separate array rather than a status field on the same rows: an
+ * open round and a running round answer different questions ("can I stake?" vs
+ * "what is happening?"), and the two clocks keep them from overlapping.
  */
 export async function GET(request: Request) {
   return withApiErrorHandling(request, async () => {
-    const active = await getActiveCompetitions(getServiceRoleSupabase());
+    const supabase = getServiceRoleSupabase();
+    const [active, live] = await Promise.all([
+      getActiveCompetitions(supabase),
+      // The strip is a convenience for a viewer; a live read failing must not
+      // take the staking list down with it.
+      getLiveCompetitions(supabase).catch(() => []),
+    ]);
+
     const competitions = active.map((competition) => ({
       id: competition.id,
       title: competition.title,
@@ -31,7 +45,16 @@ export async function GET(request: Request) {
     }));
 
     return Response.json(
-      { competitions },
+      {
+        competitions,
+        live: live.map((round) => ({
+          id: round.id,
+          title: round.title,
+          status: round.status,
+          models: round.models,
+          progress: round.progress,
+        })),
+      },
       { headers: { "cache-control": "no-store" } },
     );
   });

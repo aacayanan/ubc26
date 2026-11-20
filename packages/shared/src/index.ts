@@ -325,7 +325,8 @@ export interface ResultModel {
   modelId: string;
   name: string;
   ordinal: number;
-  status: "conformed" | "not_conformed" | "forfeited" | "unavailable" | "pending";
+  status:
+    "conformed" | "not_conformed" | "forfeited" | "unavailable" | "pending";
   /** Plain-language reason the model forfeited or was unrunnable, or null. */
   forfeitReason: string | null;
   /** Deterministic gate: the checks that decided whether it could be judged. */
@@ -402,5 +403,130 @@ export interface RoundResult {
     points: number;
     outcome: "won" | "lost" | "void" | null;
     awarded: number | null;
+  } | null;
+}
+
+// ---------------------------------------------------------------------------
+// F27 live round progress.
+//
+// The watch contract: `GET /api/rounds/[id]/progress` returns this shape, the
+// round page polls it while a round runs, and the dev watch page reads it too.
+// It lives here rather than in the service because a client component needs it
+// and the service is `server-only` — hand-redeclaring it in the page is how the
+// two drift apart.
+//
+// The payload is deliberately trimmed for polling. A full artifact can be
+// megabytes of base64; the live view shows one frame per model, and the full
+// set stays on the results API where it belongs.
+// ---------------------------------------------------------------------------
+
+/** Where a model is in the pipeline, as a viewer sees it. */
+export type LiveModelState =
+  | "pending"
+  | "generating"
+  | "rendering"
+  | "judging"
+  | "conformed"
+  | "not_conformed"
+  | "forfeited"
+  | "unavailable";
+
+/**
+ * Why a model is not progressing, in terms a viewer can act on.
+ *
+ * `stage` is what failed; `kind` is the coarse class. Neither carries provider
+ * text — `message` is written for a viewer and never echoes a provider string.
+ */
+export type LiveFailureStage = "generation" | "render" | "judge";
+
+export interface LiveFailure {
+  stage: LiveFailureStage;
+  /** Coarse class, mirroring `LLMFailureKind` where one applies. */
+  kind: string;
+  /** Viewer-safe sentence. Never provider text. */
+  message: string;
+}
+
+/** One chunk's progressive render: what it parsed to, and the frames it drew. */
+export interface LivePreview {
+  chunkIndex: number;
+  /** False is the "compiling…" state: the partial source did not parse yet. */
+  parseOk: boolean;
+  rendered: boolean;
+  frames: RenderedFrame[];
+}
+
+export interface LiveModelProgress {
+  modelId: string;
+  name: string;
+  ordinal: number;
+  state: LiveModelState;
+  /** The source written so far, revealed only after the round locks. */
+  code: string | null;
+  /**
+   * The newest source that actually parsed — what the quarantined iframe should
+   * run. `code` may be ahead of this (a half-written function), and running that
+   * would throw on its first frame instead of showing the last good render.
+   */
+  renderableCode: string | null;
+  /** True while the latest chunk has not parsed yet — the "compiling…" state. */
+  compiling: boolean;
+  /** One entry per stored chunk, oldest first. The newest parseable one wins. */
+  previews: LivePreview[];
+  chunks: {
+    /** How many chunks have landed so far. */
+    generated: number;
+    /** The policy ceiling for this round, from the execution's snapshot. */
+    expected: number;
+    /**
+     * True once the model has stopped writing. The ceiling is not a target: a
+     * model that finished in one chunk of three is done, not a third done.
+     */
+    complete: boolean;
+  };
+  /** The finished render's last frame only; the full set is on the results API. */
+  frames: RenderedFrame[];
+  /** How many frames the finished render produced, even though one is sent. */
+  frameCount: number;
+  gatePassed: boolean | null;
+  judge: {
+    verdict: "conformed" | "not_conformed" | "unavailable";
+    reason: string;
+    criteria: Array<{
+      id: string;
+      question: string;
+      weight: number;
+      passed: boolean;
+      reason: string;
+    }>;
+  } | null;
+  /** Viewer-safe explanation when the model stopped, or null while it is fine. */
+  failure: LiveFailure | null;
+}
+
+export interface LiveRoundProgress {
+  roundId: string;
+  slug: string;
+  status: RoundStatus;
+  /** True once the round is past OPEN; only then is anything renderable shown. */
+  revealed: boolean;
+  brief: { title: string; prompt: string } | null;
+  /** Geometry the quarantined replay needs; null until the round is revealed. */
+  replay: {
+    entryPoint: string;
+    frameWidth: number;
+    frameHeight: number;
+    targetDurationMs: number;
+    frameCount: number;
+  } | null;
+  models: LiveModelProgress[];
+  /** A round-level explanation while it is being retried or has failed. */
+  retry: { message: string } | null;
+  /** The round's recorded outcome, once F15/F18 have written one. */
+  outcome: {
+    kind: "settled" | "voided";
+    winnerModelId: string | null;
+    fanFavoriteModelId: string | null;
+    reason: string;
   } | null;
 }

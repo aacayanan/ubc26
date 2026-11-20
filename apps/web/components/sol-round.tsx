@@ -16,8 +16,8 @@ import { formatSol } from "@/lib/sol-pool";
  * for transactions that exist on-chain; a payout shows "Paid" only once the
  * transfer is confirmed.
  *
- * Generated code is shown as text and preview frames as server-rendered PNGs.
- * Nothing the models wrote executes on this page.
+ * The live code and renders are the shared LiveRoundPanel (F27) below this
+ * view; this component adds the token meters, betting state, pool and wagers.
  */
 
 interface PoolModel {
@@ -75,17 +75,6 @@ interface Mine {
   wagers: MyWager[];
   payouts: MyPayout[];
   canWager: boolean;
-}
-
-interface ProgressModel {
-  modelId: string;
-  name: string;
-  state: string;
-  code: string | null;
-  compiling: boolean;
-  previewFrames: Array<{ png: string }>;
-  frames: Array<{ png: string }>;
-  judge: { verdict: string; reason: string } | null;
 }
 
 type Step =
@@ -157,7 +146,6 @@ export function SolRound({
 }) {
   const [pool, setPool] = useState<Pool | null>(null);
   const [mine, setMine] = useState<Mine | null>(null);
-  const [progress, setProgress] = useState<ProgressModel[]>([]);
   const [selected, setSelected] = useState("");
   const [amount, setAmount] = useState("0.01");
   const [step, setStep] = useState<Step>({ kind: "idle" });
@@ -171,10 +159,9 @@ export function SolRound({
   );
 
   const refresh = useCallback(async () => {
-    const [poolResponse, progressResponse] = await Promise.all([
-      fetch(`/api/rounds/${roundId}/pool`, { cache: "no-store" }),
-      fetch(`/api/rounds/${roundId}/progress`, { cache: "no-store" }),
-    ]);
+    const poolResponse = await fetch(`/api/rounds/${roundId}/pool`, {
+      cache: "no-store",
+    });
     if (poolResponse.ok) {
       const body = (await poolResponse.json()) as {
         pool: Pool;
@@ -182,13 +169,6 @@ export function SolRound({
       };
       setPool(body.pool);
       setMine(body.mine);
-    }
-    if (progressResponse.ok) {
-      const body = (await progressResponse.json()) as {
-        models?: ProgressModel[];
-        progress?: { models?: ProgressModel[] };
-      };
-      setProgress(body.models ?? body.progress?.models ?? []);
     }
   }, [roundId]);
 
@@ -365,14 +345,15 @@ export function SolRound({
 
       {/* Live generation with token meters */}
       <Panel className="p-7">
-        <h2 className="t-title text-[1rem] text-ink">Generation</h2>
+        <h2 className="t-title text-[1rem] text-ink">Token budget</h2>
+        <p className="t-mono mt-1 text-[0.625rem] text-faint">
+          output tokens per model · the line marks the betting cutoff
+        </p>
         <div className="mt-5 space-y-5">
           {models.map((model) => {
-            const live = progress.find((p) => p.modelId === model.id);
             const meter = pool?.meters[model.id];
             const used =
               budget && meter ? Math.min(meter.tokens / budget, 1) : 0;
-            const frame = live?.previewFrames.at(-1) ?? null;
             return (
               <div key={model.id}>
                 <div className="flex items-center justify-between gap-3">
@@ -395,27 +376,6 @@ export function SolRound({
                     style={{ left: `${cutoff * 100}%` }}
                   />
                 </div>
-                {live?.code ? (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_120px]">
-                    <pre className="t-mono max-h-36 overflow-hidden rounded-lg border border-hairline bg-void-2/60 p-3 text-[0.625rem] leading-relaxed text-muted">
-                      <code>{live.code.slice(-900)}</code>
-                    </pre>
-                    <div className="aspect-square overflow-hidden rounded-lg border border-hairline bg-void-2/60">
-                      {frame ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`data:image/png;base64,${frame.png}`}
-                          alt={`${model.name} preview`}
-                          className="size-full object-contain"
-                        />
-                      ) : (
-                        <p className="t-mono grid size-full place-items-center text-[0.5625rem] text-faint">
-                          {live.compiling ? "compiling…" : "no preview"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
               </div>
             );
           })}

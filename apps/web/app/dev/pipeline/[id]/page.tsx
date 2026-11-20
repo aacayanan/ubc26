@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { LiveRoundProgress, RenderedFrame } from "@ai-showdown/shared";
 import {
   PageHeader,
   Panel,
@@ -20,126 +22,75 @@ import {
  *
  * Frames are *stored PNGs* rendered by the pinned Chromium sandbox — this page
  * only displays them as images. It never executes model code in the browser, so
- * it sidesteps the quarantine surface entirely (the live replay iframe is F19's
- * job, under the `sandbox="allow-scripts"` rules in CLAUDE.md).
+ * it sidesteps the quarantine surface entirely (the live replay iframe is the
+ * round page's job, under the `sandbox="allow-scripts"` rules in CLAUDE.md).
+ *
+ * The payload types come from `@ai-showdown/shared` rather than being
+ * redeclared here, so this page cannot drift from the endpoint it reads.
  */
 
-interface Frame {
-  index: number;
-  png: string;
-  blank: boolean;
-  distinctColors: number;
-  width: number;
-  height: number;
-}
+const TERMINAL_STATUSES = new Set(["SETTLED", "VOIDED", "ARCHIVED"]);
 
-interface ModelProgress {
-  modelId: string;
-  name: string;
-  ordinal: number;
-  state: string;
-  code: string | null;
-  compiling: boolean;
-  previewFrames: Frame[];
-  frames: Frame[];
-  gatePassed: boolean | null;
-  judge: {
-    verdict: "conformed" | "not_conformed" | "unavailable";
-    reason: string;
-    criteria: Array<{
-      id: string;
-      question: string;
-      weight: number;
-      passed: boolean;
-      reason: string;
-    }>;
-  } | null;
-  failureReason: string | null;
-}
+export default function PipelineWatchPage() {
+  // `useParams` rather than awaiting a `params` promise: the awaited form
+  // resolved after the fetch effect had already run with a null id, so the page
+  // sat on "Loading round…" forever with a 200 response in the network tab.
+  const params = useParams<{ id: string }>();
+  const roundId = params?.id ?? null;
 
-interface RoundProgress {
-  roundId: string;
-  slug: string;
-  status: string;
-  revealed: boolean;
-  brief: { title: string; prompt: string } | null;
-  models: ModelProgress[];
-  outcome: {
-    kind: "settled" | "voided";
-    winnerModelId: string | null;
-    fanFavoriteModelId: string | null;
-    reason: string;
-  } | null;
-}
-
-export default function PipelineWatchPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const [roundId, setRoundId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    params.then((value) => {
-      if (active) setRoundId(value.id);
-    });
-    return () => {
-      active = false;
-    };
-  }, [params]);
-
-  const [progress, setProgress] = useState<RoundProgress | null>(null);
+  const [progress, setProgress] = useState<LiveRoundProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
+
+  const load = useCallback(async (): Promise<string | null> => {
+    if (!roundId) return null;
+    try {
+      const response = await fetch(`/api/rounds/${roundId}/progress`, {
+        cache: "no-store",
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body?.error?.message ?? "Could not load progress");
+      }
+      setProgress(body as LiveRoundProgress);
+      setError(null);
+      return (body as LiveRoundProgress).status;
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Load failed");
+      return null;
+    }
+  }, [roundId]);
 
   useEffect(() => {
-    if (!roundId) return;
     let active = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
 
-    async function load() {
-      try {
-        const response = await fetch(`/api/rounds/${roundId}/progress`, {
-          cache: "no-store",
-        });
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(body?.error?.message ?? "Could not load progress");
+    function tick() {
+      if (!active) return;
+      void load().then((status) => {
+        if (!active || status === null) return;
+        if (TERMINAL_STATUSES.has(status) && timer) {
+          clearInterval(timer);
+          timer = null;
         }
-        if (active) {
-          setProgress(body as RoundProgress);
-          setError(null);
-        }
-      } catch (loadError) {
-        if (active) {
-          setError(
-            loadError instanceof Error ? loadError.message : "Load failed",
-          );
-        }
-      }
+      });
     }
 
-    load();
-    // Poll while a round is still moving; a finished round does not change.
-    const finished =
-      progress?.status === "SETTLED" ||
-      progress?.status === "VOIDED" ||
-      progress?.status === "ARCHIVED";
-    const timer = finished
-      ? null
-      : setInterval(() => setTick((n) => n + 1), 3000);
+    tick();
+    timer = setInterval(tick, 3000);
+
     return () => {
       active = false;
       if (timer) clearInterval(timer);
     };
-    // `tick` re-runs the fetch; `finished` is read from the latest progress.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundId, tick]);
+  }, [load]);
 
   const frameFor = useMemo(() => {
-    return (model: ModelProgress): Frame | null => {
-      const frame = model.frames.at(-1) ?? model.previewFrames.at(-1) ?? null;
-      return frame;
+    return (
+      model: LiveRoundProgress["models"][number],
+    ): RenderedFrame | null => {
+      return (
+        model.frames.at(-1) ?? model.previews.at(-1)?.frames.at(-1) ?? null
+      );
     };
   }, []);
 
@@ -188,7 +139,7 @@ export default function PipelineWatchPage({
         </Link>
         <button
           type="button"
-          onClick={() => setTick((n) => n + 1)}
+          onClick={() => void load()}
           className="btn btn-ghost btn-sm"
         >
           Refresh
@@ -199,6 +150,11 @@ export default function PipelineWatchPage({
         <Panel className="mt-6 p-5">
           <p className="t-label text-[0.5625rem] text-faint">Outcome</p>
           <p className="mt-2 text-sm text-ink">{progress.outcome.reason}</p>
+        </Panel>
+      ) : progress.retry ? (
+        <Panel className="mt-6 p-5">
+          <p className="t-label text-[0.5625rem] text-faint">Retry</p>
+          <p className="mt-2 text-sm text-ink">{progress.retry.message}</p>
         </Panel>
       ) : null}
 
@@ -252,9 +208,9 @@ export default function PipelineWatchPage({
                 <p className="mt-3 text-xs leading-relaxed text-muted">
                   {model.judge.reason}
                 </p>
-              ) : model.failureReason ? (
+              ) : model.failure ? (
                 <p className="mt-3 text-xs leading-relaxed text-muted">
-                  {model.failureReason}
+                  {model.failure.message}
                 </p>
               ) : null}
 
