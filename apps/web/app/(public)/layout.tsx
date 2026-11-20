@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/logo";
-import { marketingNav } from "@/components/nav-items";
+import { footerNav } from "@/components/nav-items";
 import SiteHeader from "@/components/site-header";
 
 export default function PublicLayout({ children }: LayoutProps<"/">) {
@@ -16,12 +16,12 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
             <Logo />
             <p className="t-body mt-3 max-w-[42ch] text-sm text-muted">
               Three language models, one creative brief, and a crowd that
-              decides. Renders stream live, and every stake is sealed before a
-              frame exists.
+              decides. Renders stream live, and every prediction is locked in on
+              Solana Devnet before betting closes.
             </p>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-7 gap-y-2">
-            {marketingNav.map((link) => (
+            {footerNav.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
