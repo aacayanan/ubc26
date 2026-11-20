@@ -31,6 +31,8 @@ import { closeBetting } from "@/lib/server/services/wagering/betting";
 import { recordSolSettlement } from "@/lib/server/services/wagering/sol-settlement";
 import { processPayouts } from "@/lib/server/services/wagering/payouts";
 import { getPoolView } from "@/lib/server/services/wagering/pool";
+import { WAGER_LIMITS } from "@/lib/server/services/wagering/limits";
+import { quoteLiveMinimum } from "@/lib/server/services/wagering/quote";
 
 const supabase = getServiceRoleSupabase();
 const tag = `e2e-sol-${Date.now()}`;
@@ -167,7 +169,18 @@ async function main() {
   const live = await getPoolView(roundId);
   check(live.bettingPhase === "live", "RUNNING opened live betting");
 
-  for (const [i, amount] of [BigInt(10_000_000), BigInt(20_000_000)].entries()) {
+  // Live wagers are priced in dollars: at least $3 in SOL after the ante.
+  const liveMin = BigInt(
+    (await quoteLiveMinimum(WAGER_LIMITS.minLiveUsdCents)).minLamports,
+  );
+  await expectFailure("a live wager under $3 is refused", () =>
+    prepareWager({
+      user: bettors[0].user, roundId, modelId: modelB.id, kind: "live", lamports: liveMin - BigInt(1),
+      connectedWallet: bettors[0].keypair.publicKey.toBase58(),
+    }),
+  );
+
+  for (const [i, amount] of [liveMin + BigInt(1_000_000), liveMin + BigInt(2_000_000)].entries()) {
     const bettor = bettors[i];
     const prepared = await prepareWager({
       user: bettor.user, roundId, modelId: i === 0 ? modelB.id : modelA.id, kind: "live", lamports: amount,
@@ -182,7 +195,7 @@ async function main() {
 
   await expectFailure("a tampered live wager is refused before co-signing", async () => {
     const prepared = await prepareWager({
-      user: bettors[0].user, roundId, modelId: modelA.id, kind: "live", lamports: BigInt(10_000_000),
+      user: bettors[0].user, roundId, modelId: modelA.id, kind: "live", lamports: liveMin,
       connectedWallet: bettors[0].keypair.publicKey.toBase58(),
     });
     const tx = Transaction.from(Buffer.from(prepared.transaction, "base64"));
@@ -202,7 +215,7 @@ async function main() {
   check((await getPoolView(roundId)).bettingPhase === "closed", "betting closed (token_threshold)");
   await expectFailure("a live wager after the cutoff is refused", () =>
     prepareWager({
-      user: bettors[1].user, roundId, modelId: modelB.id, kind: "live", lamports: BigInt(10_000_000),
+      user: bettors[1].user, roundId, modelId: modelB.id, kind: "live", lamports: liveMin,
       connectedWallet: bettors[1].keypair.publicKey.toBase58(),
     }),
   );
