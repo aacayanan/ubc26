@@ -10,6 +10,7 @@ import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
   Panel,
+  RoundHash,
   Status,
   roundLabel,
   roundTone,
@@ -199,8 +200,30 @@ export default function CompetitionDetailPage() {
     ((sliderValue - MIN_STAKE) / (MAX_STAKE - MIN_STAKE)) * 100,
   );
 
+  // Two clocks, two layouts. While staking is open the page is a market: title,
+  // brief and the pool. Once the round locks the page is the show — the renders
+  // take the page's full width and the pool becomes a dock that follows the
+  // scroll, because the crowd reads prices while watching, not after.
+  const isLive = !isOpen;
+
+  // What the round is doing, in one line. The live page has no room for the old
+  // explanation panel; this is the same copy, kept where it still answers the
+  // question a viewer arrives with.
+  const liveNote =
+    round.state === "EVALUATING"
+      ? "Renders are in and the judge is ruling on conformance."
+      : round.state === "SETTLED" || round.state === "ARCHIVED"
+        ? "Its conformance result and the crowd's choice are recorded in Results."
+        : round.state === "VOIDED"
+          ? "No model conformed to the brief, so no points moved. Every stake was returned."
+          : round.state === "CANCELLED" || round.state === "FAILED"
+            ? "No render ran, so every stake is void and its points return to the pool."
+            : round.state === "RETRYING"
+              ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
+              : "The round has locked. Renders are being produced, and the crowd vote opens once they land.";
+
   return (
-    <div className="shell py-12 sm:py-14">
+    <div className="shell pt-12 pb-12 sm:pt-14 sm:pb-14">
       <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2.5">
         <Link href="/competitions" className="link t-label text-[0.625rem]">
           Rounds
@@ -213,18 +236,46 @@ export default function CompetitionDetailPage() {
         </span>
       </nav>
 
-      {/* The pool is the page, so it takes the full plate: a price chart with a
-          column that stands still needs room to be read, and stacking the ticket
-          beneath it on a laptop wastes the width the chart is asking for. */}
-      <Panel className="px-7 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Status
-            tone={roundTone(round.state)}
-            pulse={round.state === "OPEN"}
-          >
-            {roundLabel(round.state)}
-          </Status>
-          {isOpen ? (
+      {isLive ? (
+        // The masthead is a document heading, not a card. The show below it is
+        // the page; a glass slab above the renders made the brief look like the
+        // headline exhibit and pushed three full-size panels past the fold.
+        <header className="border-b border-hairline pb-4">
+          <h1 className="t-title max-w-[44ch] text-[clamp(1.125rem,1.8vw,1.375rem)] text-ink">
+            {round.brief_title}
+          </h1>
+          {/* The prompt stays on the page when the round is live: the audience
+              needs to know what the models were asked to draw. */}
+          <p className="t-body mt-1.5 max-w-[78ch] text-[0.8125rem] text-muted">
+            {round.brief_text}
+          </p>
+
+          {/* Status is not repeated here — the live panel below polls it, and two
+              dots reporting different states a poll apart is a defect, not a
+              detail. The hash stays as the round's handle. */}
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span className="t-label text-[0.5625rem] text-faint">
+                Contenders
+              </span>
+              {round.models.map((m) => (
+                <span key={m.id} className="text-[0.8125rem] text-ink">
+                  {m.name}
+                </span>
+              ))}
+            </div>
+            <RoundHash id={round.id} className="text-[0.625rem]" />
+          </div>
+        </header>
+      ) : (
+        <Panel className="px-7 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Status
+              tone={roundTone(round.state)}
+              pulse={round.state === "OPEN"}
+            >
+              {roundLabel(round.state)}
+            </Status>
             <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
               <span className="text-faint">closes in</span>
               <CountdownReadout
@@ -232,254 +283,255 @@ export default function CompetitionDetailPage() {
                 className="t-num text-ink"
               />
             </span>
-          ) : (
-            <span className="t-mono text-[0.6875rem] text-faint">
-              {new Date(round.deadline).toLocaleString()}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4 flex flex-col gap-x-10 gap-y-2 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <h1 className="t-title max-w-[24ch] text-[clamp(1.6rem,2.6vw,2.05rem)] text-ink">
-              {round.brief_title}
-            </h1>
-            <p className="t-body mt-3 max-w-[62ch] text-sm text-muted">
-              {round.brief_text}
-            </p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-1 lg:flex-col lg:items-end lg:gap-y-1.5">
-            {round.models.map((m) => (
-              <span key={m.id} className="flex items-baseline gap-2">
-                <span className="t-label text-[0.5625rem] text-faint">
-                  Contender
+
+          <div className="mt-4 flex flex-col gap-x-10 gap-y-2 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="t-title max-w-[24ch] text-[clamp(1.6rem,2.6vw,2.05rem)] text-ink">
+                {round.brief_title}
+              </h1>
+              <p className="t-body mt-3 max-w-[62ch] text-sm text-muted">
+                {round.brief_text}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-x-6 gap-y-1 lg:flex-col lg:items-end lg:gap-y-1.5">
+              {round.models.map((m) => (
+                <span key={m.id} className="flex items-baseline gap-2">
+                  <span className="t-label text-[0.5625rem] text-faint">
+                    Contender
+                  </span>
+                  <span className="text-[0.8125rem] text-ink">{m.name}</span>
                 </span>
-                <span className="text-[0.8125rem] text-ink">{m.name}</span>
-              </span>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </Panel>
+        </Panel>
+      )}
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1.45fr_1fr] lg:items-start">
-        <div className="space-y-3">
-          {/* The pool as a live instrument: the price you would buy at, and the
-              three weights it is made of. It is the same control as the stake
-              form — a row here and a row there are one selection. */}
+      {isLive ? (
+        <>
+          <p className="t-body mt-4 max-w-[76ch] text-[0.8125rem] text-muted">
+            {liveNote}
+          </p>
+
+          {/* The show takes the page's full width: three renders side by side is
+              the product's promise, and it only reads when they have the room. */}
+          <LiveRoundPanel
+            roundId={round.id}
+            initialStatus={round.state}
+            className="mt-5"
+          />
+
+          {/* The pool is pinned to the bottom edge: the stakes and payouts stay
+              in view at every scroll position without taking the stage. */}
           <MarketBoard
-            id="market-board"
+            variant="dock"
             roundId={round.id}
             models={round.models}
             deadline={round.deadline}
             status={round.state}
-            selectedModelId={selected || null}
-            points={Number(stake)}
-            onPick={setSelected}
+            selectedModelId={null}
+            points={0}
+            onPick={() => {}}
           />
+        </>
+      ) : (
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-start">
+          <div className="min-w-0 space-y-3">
+            {/* The pool as a live instrument: the price you would buy at, and
+                the three weights it is made of. It is the same control as the
+                stake form — a row here and a row there are one selection. */}
+            <MarketBoard
+              id="market-board"
+              roundId={round.id}
+              models={round.models}
+              deadline={round.deadline}
+              status={round.state}
+              selectedModelId={selected || null}
+              points={Number(stake)}
+              onPick={setSelected}
+            />
 
-          <p className="t-body px-1 text-xs text-faint">
-            Points, not money. Every stake on a round is one pot; when the round
-            settles, it is split pro-rata among the backers of the model that
-            conforms to the brief — and a model nobody backed pays nobody.
-          </p>
-        </div>
+            <p className="t-body px-1 text-xs text-faint">
+              Points, not money. Every stake on a round is one pot; when the
+              round settles, it is split pro-rata among the backers of the model
+              that conforms to the brief — and a model nobody backed pays
+              nobody.
+            </p>
+          </div>
 
-        {/* Stake panel — the ticket. Picking a side happens on the market board;
-            this is where that pick becomes an amount and an act. It carries no
-            duplicate list of models: two lists showing the same price would drift
-            apart on the first poll. */}
-        <Panel className="p-7 lg:sticky lg:top-24">
-          {isOpen && !staked ? (
-            <form onSubmit={handleSubmit}>
-              <div className="flex items-center justify-between">
-                <h2 className="t-title text-[1rem] text-ink">
-                  Seal a stake
-                </h2>
-                <span className="t-mono text-[0.625rem] text-faint">
-                  before {deadline.text === "Locked" ? "lock" : deadline.text}
-                </span>
-              </div>
-
-              {/* Which side the ticket sits on, echoing the board's selection. */}
-              <div className="mt-5">
-                <p className="t-label text-[0.5625rem] text-faint">
-                  Which model conforms?
-                </p>
-                {selectedModel ? (
-                  <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-magenta/45 bg-magenta/[0.06] px-4 py-3">
-                    <span className="flex items-center gap-3">
-                      <span
-                        aria-hidden="true"
-                        className="grid size-[15px] shrink-0 place-items-center rounded-full border border-magenta"
-                      >
-                        <span className="size-[7px] rounded-full bg-magenta" />
-                      </span>
-                      <span className="text-[0.875rem] text-ink">
-                        {selectedModel.name}
-                      </span>
-                    </span>
+          <div className="min-w-0 space-y-3 lg:sticky lg:top-24">
+            {/* This column only exists while staking is open — a locked round
+                renders the live page instead — so the ticket is either a form
+                or the receipt for a stake already sealed. */}
+            <Panel className="p-7">
+              {!staked ? (
+                <form onSubmit={handleSubmit}>
+                  <div className="flex items-center justify-between">
+                    <h2 className="t-title text-[1rem] text-ink">
+                      Seal a stake
+                    </h2>
                     <span className="t-mono text-[0.625rem] text-faint">
-                      priced above
+                      before{" "}
+                      {deadline.text === "Locked" ? "lock" : deadline.text}
                     </span>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      document
-                        .getElementById("market-board")
-                        ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                    }
-                    className="mt-2.5 w-full rounded-xl border border-dashed border-[var(--control-line)] px-4 py-3 text-left text-[0.8125rem] text-muted transition-colors hover:border-white/45 hover:text-ink"
-                  >
-                    Pick a side on the pool above to price this stake
-                  </button>
-                )}
-              </div>
 
-              <div className="mt-5">
-                <div className="flex items-baseline justify-between gap-2">
-                  <label
-                    htmlFor="stake"
-                    className="t-label text-[0.5625rem] text-faint"
-                  >
-                    Stake
-                  </label>
-                  <span className="t-mono text-[0.5625rem] text-faint">
-                    range {MIN_STAKE}–{MAX_STAKE.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Slider and field are one control: the slider for feel, the
-                    field for an exact number. */}
-                <div className="mt-2.5 flex items-center gap-3">
-                  <div className="field flex flex-1 items-center gap-3 py-2">
-                    <input
-                      type="range"
-                      min={MIN_STAKE}
-                      max={MAX_STAKE}
-                      step={10}
-                      value={sliderValue}
-                      onChange={(e) => setStake(e.target.value)}
-                      aria-label="Stake amount"
-                      aria-describedby="stake-hint"
-                      className="stake-range"
-                      style={{ "--fill": `${sliderFill}%` } as React.CSSProperties}
-                    />
-                    <input
-                      id="stake"
-                      type="number"
-                      min={MIN_STAKE}
-                      step={10}
-                      value={stake}
-                      onChange={(e) => setStake(e.target.value)}
-                      aria-describedby="stake-hint"
-                      className="t-num w-[4.5rem] shrink-0 border-0 bg-transparent text-right text-[0.9375rem] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                    />
+                  {/* Which side the ticket sits on, echoing the board's
+                      selection. */}
+                  <div className="mt-5">
+                    <p className="t-label text-[0.5625rem] text-faint">
+                      Which model conforms?
+                    </p>
+                    {selectedModel ? (
+                      <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-magenta/45 bg-magenta/[0.06] px-4 py-3">
+                        <span className="flex items-center gap-3">
+                          <span
+                            aria-hidden="true"
+                            className="grid size-[15px] shrink-0 place-items-center rounded-full border border-magenta"
+                          >
+                            <span className="size-[7px] rounded-full bg-magenta" />
+                          </span>
+                          <span className="text-[0.875rem] text-ink">
+                            {selectedModel.name}
+                          </span>
+                        </span>
+                        <span className="t-mono text-[0.625rem] text-faint">
+                          priced above
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          document
+                            .getElementById("market-board")
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center",
+                            })
+                        }
+                        className="mt-2.5 w-full rounded-xl border border-dashed border-[var(--control-line)] px-4 py-3 text-left text-[0.8125rem] text-muted transition-colors hover:border-white/45 hover:text-ink"
+                      >
+                        Pick a side on the pool above to price this stake
+                      </button>
+                    )}
                   </div>
-                  <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
-                    pts
-                  </span>
+
+                  <div className="mt-5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <label
+                        htmlFor="stake"
+                        className="t-label text-[0.5625rem] text-faint"
+                      >
+                        Stake
+                      </label>
+                      <span className="t-mono text-[0.5625rem] text-faint">
+                        range {MIN_STAKE}–{MAX_STAKE.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Slider and field are one control: the slider for feel,
+                        the field for an exact number. */}
+                    <div className="mt-2.5 flex items-center gap-3">
+                      <div className="field flex flex-1 items-center gap-3 py-2">
+                        <input
+                          type="range"
+                          min={MIN_STAKE}
+                          max={MAX_STAKE}
+                          step={10}
+                          value={sliderValue}
+                          onChange={(e) => setStake(e.target.value)}
+                          aria-label="Stake amount"
+                          aria-describedby="stake-hint"
+                          className="stake-range"
+                          style={
+                            {
+                              "--fill": `${sliderFill}%`,
+                            } as React.CSSProperties
+                          }
+                        />
+                        <input
+                          id="stake"
+                          type="number"
+                          min={MIN_STAKE}
+                          step={10}
+                          value={stake}
+                          onChange={(e) => setStake(e.target.value)}
+                          aria-describedby="stake-hint"
+                          className="t-num w-[4.5rem] shrink-0 border-0 bg-transparent text-right text-[0.9375rem] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </div>
+                      <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
+                        pts
+                      </span>
+                    </div>
+                    <p
+                      id="stake-hint"
+                      className="t-mono mt-2 text-[0.625rem] text-faint"
+                    >
+                      minimum {MIN_STAKE} points · one stake per round · you can
+                      raise it until the deadline
+                    </p>
+                  </div>
+
+                  {error ? (
+                    <p
+                      role="alert"
+                      className="mt-4 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3 py-2 text-xs text-magenta"
+                    >
+                      {error}
+                    </p>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    disabled={saving || !selected || Number(stake) < MIN_STAKE}
+                    className="btn btn-solid btn-block mt-6"
+                  >
+                    {saving
+                      ? "Sealing…"
+                      : selectedModel
+                        ? `Seal ${Number(stake).toLocaleString()} on ${selectedModel.name}`
+                        : "Seal this stake"}
+                  </button>
+
+                  <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
+                    committed on devnet as hash(pick, stake, nonce)
+                  </p>
+                </form>
+              ) : (
+                <div className="text-center">
+                  <Status tone="ink">Sealed</Status>
+                  <p className="t-title mt-5 text-lg text-ink">
+                    Your stake is in the pool.
+                  </p>
+                  {round.user_stake ? (
+                    <p className="t-num mt-2 text-[0.8125rem] text-muted">
+                      {round.user_stake.points.toLocaleString()} pts on{" "}
+                      <span className="text-ink">
+                        {round.models.find(
+                          (m) => m.id === round.user_stake?.model_id,
+                        )?.name ?? "a contender"}
+                      </span>
+                    </p>
+                  ) : null}
+                  <p className="t-body mt-2 text-sm text-muted">
+                    It is locked for this round, and settles with the pool once
+                    the round settles.
+                  </p>
+                  <Link
+                    href="/predictions"
+                    className="btn btn-ghost btn-block mt-6"
+                  >
+                    My predictions
+                  </Link>
                 </div>
-                <p
-                  id="stake-hint"
-                  className="t-mono mt-2 text-[0.625rem] text-faint"
-                >
-                  minimum {MIN_STAKE} points · one stake per round · you can raise
-                  it until the deadline                </p>
-              </div>
-
-              {error ? (
-                <p
-                  role="alert"
-                  className="mt-4 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3 py-2 text-xs text-magenta"
-                >
-                  {error}
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={saving || !selected || Number(stake) < MIN_STAKE}
-                className="btn btn-solid btn-block mt-6"
-              >
-                {saving
-                  ? "Sealing…"
-                  : selectedModel
-                    ? `Seal ${Number(stake).toLocaleString()} on ${selectedModel.name}`
-                    : "Seal this stake"}
-              </button>
-
-              <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
-                committed on devnet as hash(pick, stake, nonce)
-              </p>
-            </form>
-          ) : staked ? (
-            <div className="text-center">
-              <Status tone="ink">Sealed</Status>
-              <p className="t-title mt-5 text-lg text-ink">
-                Your stake is in the pool.
-              </p>
-              <p className="t-body mt-2 text-sm text-muted">
-                It is locked for this round, and settles with the pool once the
-                round settles.
-              </p>
-              <Link
-                href="/predictions"
-                className="btn btn-ghost btn-block mt-6"
-              >
-                My predictions
-              </Link>
-            </div>
-          ) : (
-            <div className="text-center">
-              <Status
-                tone={
-                  round.state === "VOIDED"
-                    ? "amber"
-                    : round.state === "SETTLED" || round.state === "ARCHIVED"
-                      ? "ink"
-                      : "violet"
-                }
-              >
-                {roundLabel(round.state)}
-              </Status>
-              <p className="t-title mt-5 text-lg text-ink">
-                {round.state === "SETTLED" || round.state === "ARCHIVED"
-                  ? "This round has settled."
-                  : round.state === "VOIDED"
-                    ? "This round was void."
-                    : round.state === "CANCELLED" || round.state === "FAILED"
-                      ? "This round did not run."
-                      : "Staking is closed."}
-              </p>
-              <p className="t-body mt-2 text-sm text-muted">
-                {round.state === "EVALUATING"
-                  ? "Renders are in and the judge is ruling on conformance."
-                  : round.state === "SETTLED" || round.state === "ARCHIVED"
-                    ? "Its conformance result and the crowd's choice are recorded in Results."
-                    : round.state === "VOIDED"
-                      ? "No model conformed to the brief, so no points moved. Every stake was returned."
-                      : round.state === "CANCELLED" || round.state === "FAILED"
-                        ? "No render ran, so every stake is void and its points return to the pool."
-                        : round.state === "RETRYING"
-                          ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
-                          : "The round has locked. Renders are being produced, and the crowd vote opens once they land."}
-              </p>
-              <Link href="/results" className="btn btn-ghost btn-block mt-6">
-                Results
-              </Link>
-            </div>
-          )}
-        </Panel>
-      </div>
-
-      {/* The two clocks, made visible: once the round is past OPEN the stake
-          panel can no longer act, and the page becomes the show — each model's
-          code streaming, and its render the moment that code compiles. */}
-      {round.state !== "OPEN" ? (
-        <LiveRoundPanel roundId={round.id} initialStatus={round.state} />
-      ) : null}
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

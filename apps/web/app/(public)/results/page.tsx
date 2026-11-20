@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { EmptyState, PageHeader, Panel, Status } from "@/components/ui";
+import { ChevronRight } from "@/components/icons";
+import {
+  EmptyState,
+  PageHeader,
+  Panel,
+  RoundHash,
+  Status,
+} from "@/components/ui";
 import type { ResultDisplayState } from "@ai-showdown/shared";
 
 interface ResultEntry {
@@ -23,8 +30,9 @@ interface ResultEntry {
  *
  * Every settled or voided round, with its two independent outcomes kept apart:
  * which model conformed to the brief, and which one the crowd named best. Each
- * card leads to the full result — the three rendered artifacts, a replay of each
- * model's code, the judge's reasons and the final odds — at `/results/[id]`.
+ * row leads to the full result — the three rendered artifacts, a replay of each
+ * model's code, the judge's reasons and the final odds — at `/results/[id]`,
+ * where the outcome reason and pool note live.
  *
  * Status is a dot plus a word, never amber (amber is account-warning only).
  */
@@ -74,10 +82,7 @@ export default function ResultsPage() {
 
   return (
     <div className="shell py-14 sm:py-16">
-      <PageHeader
-        title="Results"
-        description="Every settled round keeps its two outcomes separate: which model conformed to the brief, and which one the crowd named best."
-      />
+      <PageHeader title="Results" />
 
       <div className="mt-10">
         {loading && results.length === 0 ? (
@@ -116,59 +121,99 @@ export default function ResultsPage() {
             and the pool has been split.
           </EmptyState>
         ) : (
-          <ul className="grid gap-3">
-            {results.map((r) => (
-              <li key={r.round_id}>
-                <Link
-                  href={`/results/${r.round_id}`}
-                  className="panel panel-interactive group block p-6"
+          /* One instrument table, not a stack of cards: a single glass panel
+             with hairline-separated rows. Labels sit inline in every row, so
+             the list reads the same whether scanned as a table or read a row
+             at a time. */
+          <Panel className="overflow-hidden" interactive>
+            <ul>
+              {results.map((r) => (
+                <li
+                  key={r.round_id}
+                  className="border-t border-hairline first:border-t-0"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <h2 className="t-title text-[1.0625rem] text-ink">
-                        {r.brief_title}
-                      </h2>
-                      <Status tone={r.kind === "voided" ? "violet" : "ink"}>
-                        {r.kind === "voided" ? "Void" : "Settled"}
-                      </Status>
+                  {/* Base: three stacked lines — round, outcomes, pool+date.
+                      lg: one aligned row of five columns. Pool and date share
+                      a line below lg and split into their own columns above
+                      it, handed straight to the row grid by `contents`. */}
+                  <Link
+                    href={`/results/${r.round_id}`}
+                    className="group grid grid-cols-[1fr_auto] gap-x-5 gap-y-2.5 px-5 py-3.5 transition-colors hover:bg-white/[0.02] lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_8.5rem_9rem_1rem]"
+                  >
+                    {/* The brief names the round; the id is the handle that
+                        names this instance and no other. */}
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <h2 className="t-title min-w-0 truncate text-[0.9375rem] text-ink">
+                          {r.brief_title}
+                        </h2>
+                        <Status tone={r.kind === "voided" ? "violet" : "ink"}>
+                          {r.kind === "voided" ? "Void" : "Settled"}
+                        </Status>
+                      </div>
+                      <div className="mt-1">
+                        <RoundHash id={r.round_id} />
+                      </div>
                     </div>
-                    <span className="t-mono text-[0.625rem] text-faint">
-                      {new Date(r.settled_at).toLocaleString()}
-                    </span>
-                  </div>
 
-                  <div className="mt-5 grid gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-2">
-                    <div className="bg-void-2/80 px-5 py-4">
-                      <p className="t-label text-[0.5625rem] text-faint">
-                        Conformed
-                      </p>
-                      <p className="mt-1.5 text-[1rem] text-ink">
-                        {r.conformed_model ?? "No model conformed"}
-                      </p>
+                    {/* The two outcomes stay separate, never merged into one
+                        "winner": the pool settles on conformance, the crowd
+                        vote is its own award. */}
+                    <div className="col-span-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 lg:col-span-1">
+                      <span className="flex items-baseline gap-1.5">
+                        <span className="t-label text-[0.5625rem] text-faint">
+                          Conformed
+                        </span>
+                        <span className="text-[0.8125rem] text-ink">
+                          {r.conformed_model ?? "No model conformed"}
+                        </span>
+                      </span>
+                      <span className="flex items-baseline gap-1.5">
+                        <span className="t-label text-[0.5625rem] text-faint">
+                          Crowd&rsquo;s choice
+                        </span>
+                        <span className="text-[0.8125rem] text-ink">
+                          {r.crowd_model ?? "—"}
+                        </span>
+                      </span>
                     </div>
-                    <div className="bg-void-2/80 px-5 py-4">
-                      <p className="t-label text-[0.5625rem] text-faint">
-                        Crowd&rsquo;s choice
-                      </p>
-                      <p className="mt-1.5 text-[1rem] text-ink">
-                        {r.crowd_model ?? "—"}
-                      </p>
+
+                    <div className="col-span-2 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 lg:contents">
+                      {/* The number the eye compares down the column. On a
+                          void the status says nothing moved; this is the pot
+                          that was staked and returned. */}
+                      <span className="flex items-baseline gap-1.5 lg:col-start-3 lg:row-start-1 lg:justify-end">
+                        <span className="t-label text-[0.5625rem] text-faint">
+                          Pool
+                        </span>
+                        <span className="t-num text-[0.8125rem] text-ink">
+                          {r.pool_points.toLocaleString()}
+                          <span className="ml-1 text-[0.625rem] text-faint">
+                            pts
+                          </span>
+                        </span>
+                      </span>
+
+                      {/* Settled date, faint mono; the full timestamp stays
+                          on the title so the row shows only the date. */}
+                      <span
+                        className="t-mono whitespace-nowrap text-[0.625rem] text-faint lg:col-start-4 lg:row-start-1 lg:text-right"
+                        title={new Date(r.settled_at).toLocaleString()}
+                      >
+                        {new Date(r.settled_at).toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
                     </div>
-                  </div>
 
-                  {r.reason ? (
-                    <p className="t-body mt-4 text-xs text-muted">{r.reason}</p>
-                  ) : null}
-
-                  <p className="t-body mt-2 text-xs text-faint">
-                    {r.kind === "voided"
-                      ? "No points moved. Every stake was returned."
-                      : `Pool split: ${r.pool_points.toLocaleString()} pts, pro-rata among backers of the conforming model.`}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <ChevronRight className="col-start-2 row-start-1 size-4 shrink-0 self-center justify-self-end text-faint transition-colors group-hover:text-muted lg:col-start-5 lg:row-start-1" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
         )}
       </div>
     </div>

@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PriceRibbon, modelInk, type PriceSample } from "@/components/price-ribbon";
+import {
+  PriceRibbon,
+  modelInk,
+  type PriceSample,
+} from "@/components/price-ribbon";
 import { Panel, Status, cx } from "@/components/ui";
 import { computeDraftPricing, formatMultiplier } from "@/lib/odds";
 
@@ -49,6 +53,7 @@ export function MarketBoard({
   points,
   onPick,
   className,
+  variant = "panel",
 }: {
   /** Anchor so the stake ticket can point a reader at the board. */
   id?: string;
@@ -61,6 +66,14 @@ export function MarketBoard({
   points: number;
   onPick: (modelId: string) => void;
   className?: string;
+  /**
+   * `panel` is the market page's board — chart, rows, the full reading.
+   * `dock` is the live page's: the same prices compressed into a bar pinned to
+   * the bottom of the viewport, so the crowd can watch the renders and read the
+   * pool without choosing between them. It carries no chart and no draft, since
+   * a locked round has neither.
+   */
+  variant?: "panel" | "dock";
 }) {
   const [stakes, setStakes] = useState<Record<string, number> | null>(null);
   /**
@@ -186,6 +199,112 @@ export function MarketBoard({
 
   const deadlineLabel = formatDeadline(deadline);
 
+  if (variant === "dock") {
+    return (
+      <section
+        id={id}
+        aria-label={isOpen ? "The pool" : "The final pool"}
+        className={cx(
+          // Fixed: the pool is a reading you glance at while watching, so it has
+          // to be there on the first frame and at every scroll position, not
+          // only once the page happens to have scrolled past its slot. The page
+          // reserves matching bottom padding so no content hides under it.
+          "fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-void/85 backdrop-blur-xl",
+          className,
+        )}
+      >
+        <div className="shell flex flex-wrap items-center gap-x-6 gap-y-2 py-2.5 sm:py-3">
+          <div className="flex w-full shrink-0 items-baseline justify-between gap-2.5 sm:w-auto sm:justify-start">
+            <span className="flex items-baseline gap-2.5">
+              <span className="t-label text-[0.5625rem] text-faint">
+                {isOpen ? "The pool" : "Final pool"}
+              </span>
+              <span className="t-num text-[0.9375rem] text-ink">
+                {pricing.pot.toLocaleString()}
+                <span className="ml-1 text-[0.625rem] text-faint">pts</span>
+              </span>
+            </span>
+            <span className="t-mono flex items-center gap-3 text-[0.5625rem] text-faint sm:hidden">
+              {isOpen ? (
+                <Status tone={live ? "live" : "idle"} pulse={live}>
+                  {live ? "Live" : "Stalled"}
+                </Status>
+              ) : (
+                <span className="sr-only">stakes closed</span>
+              )}
+            </span>
+          </div>
+
+          <span
+            aria-hidden="true"
+            className="hidden h-6 w-px bg-hairline sm:block"
+          />
+
+          {/* One line per model, in the same ink as its row on the board, so a
+              viewer reading prices while the renders run can still tell which
+              side is which without a legend. On a phone the three become three
+              equal columns — a wrapped row gave each name a letter of room. */}
+          <ul className="grid w-full min-w-0 flex-1 grid-cols-3 gap-x-3 gap-y-1 sm:flex sm:flex-wrap sm:items-center sm:gap-x-5">
+            {pricing.models.map((model, index) => (
+              <li
+                key={model.modelId}
+                className="flex min-w-0 items-center gap-x-2 sm:gap-2.5"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-[6px] shrink-0 rounded-full"
+                  style={{ background: modelInk(index) }}
+                />
+                <span className="grid min-w-0 sm:flex sm:min-w-0 sm:items-center sm:gap-2.5">
+                  <span className="block truncate text-[0.75rem] text-ink sm:text-[0.8125rem]">
+                    {model.modelName}
+                  </span>
+                  <span className="flex items-baseline gap-2 sm:gap-2.5">
+                    <span className="t-num whitespace-nowrap text-[0.625rem] text-muted sm:text-[0.6875rem]">
+                      {model.staked.toLocaleString()}
+                      <span className="ml-1 text-[0.5rem] text-faint sm:text-[0.5625rem]">
+                        pts
+                      </span>
+                    </span>
+
+                    <span
+                      className={cx(
+                        "t-num whitespace-nowrap text-[0.625rem] sm:text-[0.6875rem]",
+                        model.multiplier === null ? "text-faint" : "text-ink",
+                      )}
+                    >
+                      {formatMultiplier(model.multiplier)}
+                    </span>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden shrink-0 items-center gap-3 sm:flex">
+            <span className="t-mono text-[0.5625rem] text-faint">
+              {isOpen ? "closes" : "stakes closed"} {deadlineLabel}
+            </span>
+            {isOpen ? (
+              <Status tone={live ? "live" : "idle"} pulse={live}>
+                {live ? "Live" : "Stalled"}
+              </Status>
+            ) : null}
+          </div>
+        </div>
+
+        {loadError ? (
+          <p
+            role="status"
+            className="t-mono border-t border-hairline px-5 py-1.5 text-center text-[0.5625rem] text-muted sm:px-8"
+          >
+            Lost the live pool — showing the last reading. Retrying…
+          </p>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <Panel className={cx("overflow-hidden", className)} id={id}>
       {/* Instrument header: state, clock, and the live-feed dot. */}
@@ -248,7 +367,9 @@ export function MarketBoard({
                   isPicked
                     ? "border-magenta/45 bg-magenta/[0.06]"
                     : "border-transparent",
-                  isOpen && !isPicked && "hover:border-hairline hover:bg-white/[0.02]",
+                  isOpen &&
+                    !isPicked &&
+                    "hover:border-hairline hover:bg-white/[0.02]",
                   !isOpen && "cursor-default",
                 )}
               >
@@ -303,28 +424,21 @@ export function MarketBoard({
                   </span>
                 </span>
 
-                <span className="flex items-baseline gap-3">
-                  <span className="flex min-w-0 flex-col items-start gap-1">
-                    <span className="t-label text-[0.5rem] text-faint">
-                      chance
-                    </span>
-                    <span className="t-num whitespace-nowrap text-[1.0625rem] leading-none text-ink">
-                      {model.percent.toFixed(1)}
-                      <span className="text-[0.625rem] text-faint">%</span>
-                    </span>
+                {/* Only the payout. The implied chance is already drawn twice
+                    on this row — the bar under it and the line on the chart —
+                    and stating it a third time as a percentage made a parimutuel
+                    price read like a forecast of the render. */}
+                <span className="flex w-[3.6rem] shrink-0 flex-col items-end gap-1">
+                  <span className="t-label text-[0.5rem] text-faint">
+                    payout
                   </span>
-                  <span className="flex w-[3.6rem] shrink-0 flex-col items-end gap-1">
-                    <span className="t-label text-[0.5rem] text-faint">
-                      payout
-                    </span>
-                    <span
-                      className={cx(
-                        "t-num whitespace-nowrap text-[0.8125rem] leading-none",
-                        model.multiplier === null ? "text-faint" : "text-muted",
-                      )}
-                    >
-                      {formatMultiplier(model.multiplier)}
-                    </span>
+                  <span
+                    className={cx(
+                      "t-num whitespace-nowrap text-[0.8125rem] leading-none",
+                      model.multiplier === null ? "text-faint" : "text-muted",
+                    )}
+                  >
+                    {formatMultiplier(model.multiplier)}
                   </span>
                 </span>
               </button>

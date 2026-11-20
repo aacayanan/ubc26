@@ -131,9 +131,6 @@ export default async function DashboardPage() {
               <PracticeBadge label="Practice" />
             ) : null}
           </div>
-          <p className="t-body mt-2 text-sm text-muted">
-            Your side of the arena at a glance.
-          </p>
         </div>
 
         {!profile.funded ? (

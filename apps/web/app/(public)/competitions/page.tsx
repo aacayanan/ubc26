@@ -48,6 +48,10 @@ interface LiveRound {
  * A running round used to be invisible unless you kept its URL — the list only
  * ever showed `OPEN`. This is the way back in. It renders nothing when no round
  * is live, so an idle arena is not padded with placeholders.
+ *
+ * It uses the same tile and the same grid as the open list beneath it, so the
+ * page reads as one board of rounds in different states rather than two
+ * differently-shaped lists stapled together.
  */
 function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
   if (rounds.length === 0) return null;
@@ -66,14 +70,14 @@ function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
         </span>
       </div>
 
-      <ul className="mt-4 grid gap-3">
+      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rounds.map((round) => (
           <li key={round.id}>
             <Link
               href={`/competitions/${round.id}`}
-              className="panel panel-interactive flex flex-wrap items-center justify-between gap-x-8 gap-y-3 p-5"
+              className="panel panel-interactive flex h-full flex-col p-4"
             >
-              <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
                 <Status
                   tone={roundTone(round.status)}
                   pulse={
@@ -82,29 +86,29 @@ function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
                 >
                   {roundLabel(round.status)}
                 </Status>
-                <h3 className="t-title mt-2.5 text-[1rem] text-ink">
-                  {round.title}
-                </h3>
-                <p className="t-mono mt-1.5 text-[0.6875rem] text-faint">
-                  {round.models.join(" · ")}
-                </p>
+                <span className="t-num shrink-0 text-[0.8125rem] leading-none text-ink">
+                  {round.done}
+                  <span className="text-[0.6875rem] text-faint">
+                    /{round.total}
+                  </span>
+                </span>
               </div>
 
-              <div className="w-40 shrink-0">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="t-label text-[0.5625rem] text-faint">
-                    Models done
-                  </span>
-                  <span className="t-num text-[1.125rem] text-ink">
-                    {round.done}
-                    <span className="text-muted">/{round.total}</span>
-                  </span>
-                </div>
+              <h3 className="t-title mt-2.5 line-clamp-2 text-[0.9375rem] text-ink">
+                {round.title}
+              </h3>
+              <p className="t-mono mt-1 truncate text-[0.6875rem] text-faint">
+                {round.models.join(" · ")}
+              </p>
+
+              <div className="mt-auto pt-3">
                 <Meter
                   value={round.total > 0 ? round.done / round.total : 0}
-                  className="mt-2"
                   label={`${round.done} of ${round.total} models have finished`}
                 />
+                <p className="t-label mt-2 text-[0.5rem] text-faint">
+                  models done
+                </p>
               </div>
             </Link>
           </li>
@@ -114,7 +118,20 @@ function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
   );
 }
 
-/** One round on the list: preview, contenders, countdown, pool and odds. */
+/**
+ * One round on the board — a market tile, not a page.
+ *
+ * The list is a board you scan: a grid of tiles, each one small enough to read
+ * at a glance and to compare against its neighbours. The brief names the tile
+ * and the clock sits beside the state; beneath them each contender gets one
+ * line — name, payout, chance — so the three prices are the thing the eye lands
+ * on rather than the last thing under a paragraph.
+ *
+ * Chance is the numeral in the right-hand box and the width of the bar beneath
+ * the name; payout sits immediately before it. Both are readouts, so both are
+ * tabular mono. The bar keeps the model's own ink, tying the row to its line in
+ * the round page's ribbon without drawing a second chart here.
+ */
 function RoundCard({
   round,
   onExpire,
@@ -122,104 +139,105 @@ function RoundCard({
   round: OpenRound;
   onExpire: () => void;
 }) {
-  const backed = round.odds.filter((model) => model.staked > 0);
-
   return (
     <Link
       href={`/competitions/${round.id}`}
-      className="panel panel-interactive group block p-6"
+      className="panel panel-interactive group flex h-full flex-col p-4"
     >
-      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Status tone="live" pulse>
-              Staking open
-            </Status>
-            <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
-              <span className="text-faint">closes in</span>
-              <CountdownReadout
-                deadline={round.deadline}
-                onExpire={onExpire}
-                className="t-num text-ink"
-              />
-            </span>
-          </div>
-
-          <h2 className="t-title mt-3 text-[1.0625rem] text-ink">
-            {round.title}
-          </h2>
-          <p className="t-body mt-2 line-clamp-2 max-w-[62ch] text-sm text-muted">
-            {round.preview}
-          </p>
-          <p className="t-mono mt-3 text-[0.6875rem] text-faint">
-            {round.models.join(" · ")}
-          </p>
-        </div>
-
-        {/* The pot, as a readout. Its size is not a target: there is no stake
-            cap, so the capacity meter that used to sit here implied a goal the
-            product does not have. What a reader compares is the price. */}
-        <div className="shrink-0 text-right">
-          <p className="t-label text-[0.5625rem] text-faint">Pot</p>
-          <p className="t-num mt-1.5 text-[1.375rem] leading-none text-ink">
-            {round.pot.toLocaleString()}
-            <span className="ml-1 text-xs text-muted">pts</span>
-          </p>
-          <p className="t-mono mt-1.5 text-[0.5625rem] text-faint">
-            {round.pot > 0 ? "splits among the winner's backers" : "no stakes yet"}
-          </p>
-        </div>
+      {/* State and clock share the top line: what this tile is and how long it
+          stays that way. The countdown is the tile's live element. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Status tone="live" pulse>
+          Staking open
+        </Status>
+        <span className="t-mono flex items-center gap-1.5 text-[0.625rem] text-muted">
+          <span className="text-faint">closes</span>
+          <CountdownReadout
+            deadline={round.deadline}
+            onExpire={onExpire}
+            className="t-num text-ink"
+          />
+        </span>
       </div>
 
-      {/* The three prices, in the same language as the round page's board:
-          chance is the width of the bar, payout sits beside it, and each row's
-          ink ties it to its line in a chart the list does not draw. */}
-      <ul className="mt-5 grid gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-3">
+      <h2 className="t-title mt-2.5 line-clamp-2 text-[0.9375rem] text-ink">
+        {round.title}
+      </h2>
+      <p className="t-body mt-1 line-clamp-1 text-[0.75rem] text-faint">
+        {round.preview}
+      </p>
+
+      {/* Only the payout column is named. The boxed numeral is the model's
+          share of the pot — the same number its underline already draws — so a
+          label over it would name something the reader can see. */}
+      <div className="mt-3 flex items-baseline gap-2.5 px-1.5">
+        <span className="min-w-0 flex-1" />
+        <span className="t-label hidden shrink-0 text-[0.5rem] text-faint sm:block">
+          payout
+        </span>
+        <span className="w-[2.9rem] shrink-0" />
+      </div>
+
+      {/* The three prices. One row per contender, the same language as the
+          round page's board: the bar is the chance, the numeral is the price,
+          the multiplier is the payoff. */}
+      <ul className="mt-1 grid gap-0.5">
         {round.odds.map((model, index) => (
-          <li key={model.modelId} className="bg-void-2/80 px-4 py-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="truncate text-[0.8125rem] text-ink">
+          <li
+            key={model.modelId}
+            className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors group-hover:bg-white/[0.02]"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.8125rem] leading-tight text-ink">
                 {model.modelName}
-              </p>
-              <span
-                className={
-                  model.multiplier === null
-                    ? "t-num shrink-0 text-[0.8125rem] text-faint"
-                    : "t-num shrink-0 text-[0.8125rem] text-muted"
-                }
-              >
-                {formatMultiplier(model.multiplier)}
               </span>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between gap-2">
-              <span className="t-num text-[1rem] leading-none text-ink">
-                {(model.share * 100).toFixed(1)}
-                <span className="text-[0.625rem] text-faint">%</span>
-              </span>
-              <span className="t-mono text-[0.5625rem] text-faint">
-                {model.staked.toLocaleString()} pts
-              </span>
-            </div>
-            {/* Same weight of pale ink as this model's line would be. */}
-            <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.05]">
+              {/* The name's underline is the chance: its own ink, its own
+                  width, so a side is scannable without reading the number. */}
               <span
                 aria-hidden="true"
-                className="block h-full rounded-full"
-                style={{
-                  width: `${Math.max(0, Math.min(1, model.share)) * 100}%`,
-                  background: modelInk(index),
-                }}
-              />
-            </div>
+                className="mt-1 block h-[2px] w-full overflow-hidden rounded-full bg-white/[0.05]"
+              >
+                <span
+                  className="block h-full rounded-full transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                  style={{
+                    width: `${Math.max(0, Math.min(1, model.share)) * 100}%`,
+                    background: modelInk(index),
+                  }}
+                />
+              </span>
+            </span>
+
+            <span
+              className={
+                model.multiplier === null
+                  ? "t-num hidden shrink-0 text-[0.6875rem] text-faint sm:block"
+                  : "t-num hidden shrink-0 text-[0.6875rem] text-muted sm:block"
+              }
+            >
+              {formatMultiplier(model.multiplier)}
+            </span>
+
+            {/* The price, boxed: the one number on the row that is a reading
+                rather than a label, so it gets its own boundary. Fixed width so
+                the boxes line up down the tile and the column of chances reads
+                as one ladder. */}
+            <span className="t-num flex h-[1.6rem] w-[2.9rem] shrink-0 items-baseline justify-center gap-px rounded-lg border border-hairline bg-white/[0.03] pt-[0.28rem] text-[0.9375rem] leading-none text-ink">
+              {(model.share * 100).toFixed(0)}
+              <span className="text-[0.625rem] text-faint">%</span>
+            </span>
           </li>
         ))}
       </ul>
 
-      {backed.length > 0 && backed.length < round.odds.length ? (
-        <p className="t-mono mt-3 text-[0.5625rem] text-faint">
-          an unbacked model shows no payout — nobody is in that pool
-        </p>
-      ) : null}
+      {/* The pot closes the tile as a readout, not a target: there is no stake
+          cap, so the number only says how much is riding on the round. */}
+      <div className="mt-auto flex items-baseline justify-between gap-3 border-t border-hairline pt-2.5">
+        <span className="t-label text-[0.5rem] text-faint">Pot</span>
+        <span className="t-num text-[0.8125rem] leading-none text-ink">
+          {round.pot.toLocaleString()}
+          <span className="ml-1 text-[0.625rem] text-muted">pts</span>
+        </span>
+      </div>
     </Link>
   );
 }
@@ -325,10 +343,7 @@ export default function CompetitionsPage() {
 
   return (
     <div className="shell py-14 sm:py-16">
-      <PageHeader
-        title="Rounds"
-        description="Each round is one creative brief and three models rendering it side by side. Staking closes at the deadline — after that, the crowd watches and votes."
-      />
+      <PageHeader title="Rounds" />
 
       <LiveStrip rounds={live} />
 
@@ -378,7 +393,7 @@ export default function CompetitionsPage() {
             moment the next brief is published.
           </EmptyState>
         ) : (
-          <ul className="grid gap-3">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {rounds.map((round) => (
               <li key={round.id}>
                 <RoundCard round={round} onExpire={reload} />
@@ -388,10 +403,10 @@ export default function CompetitionsPage() {
         )}
       </div>
 
-      <Panel
-        quiet
-        className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3 px-5 py-4"
-      >
+      {/* A legend, not a panel. It says what the two live states mean in one
+          reading, so it sits on the page's own ground under a hairline rather
+          than in a surface that competes with the rounds above it. */}
+      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-hairline pt-5">
         <Status tone="live" pulse>
           Staking
         </Status>
@@ -399,11 +414,15 @@ export default function CompetitionsPage() {
           Open rounds accept stakes until the deadline. The multiplier moves
           only as other people stake.
         </p>
+        <span
+          aria-hidden="true"
+          className="hidden h-3 w-px shrink-0 bg-hairline sm:block"
+        />
         <Status tone="violet">Locked</Status>
         <p className="t-body text-[0.8125rem] text-muted">
           Locked rounds are rendering, being judged, or settled.
         </p>
-      </Panel>
+      </div>
     </div>
   );
 }
