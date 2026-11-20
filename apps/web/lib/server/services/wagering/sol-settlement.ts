@@ -138,6 +138,7 @@ export async function recordSolSettlement(
       memo: settleMemo({
         roundId,
         kind: result.kind,
+        reason: result.reason,
         winners: result.winners,
         gross: result.gross.toString(),
         fee: result.fee.toString(),

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { RoundRecords } from "@/components/round-records";
 import type { ResultDisplayState, RenderedFrame } from "@ai-showdown/shared";
 import {
   CrosshairMark,
@@ -369,6 +370,10 @@ export default function ResultDetailPage() {
       </section>
 
       {/* Crowd's fan-favorite — displayed, not voted on here (F32 owns voting). */}
+      {/* F22: the settlement (and the round's other records) as published on
+          Devnet, checkable against this result. */}
+      {roundId ? <RoundRecords roundId={roundId} /> : null}
+
       <section className="mt-12">
         <SectionHeading>Crowd&rsquo;s choice</SectionHeading>
         <Panel className="mt-4 p-6">
