@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   LEADERBOARD_LIMIT,
-  aggregateSettled,
+  aggregatePredictions,
   getLeaderboard,
   opaqueKey,
   pseudonymFor,
@@ -53,57 +53,33 @@ describe("pseudonyms and keys", () => {
   });
 });
 
-describe("aggregateSettled", () => {
-  it("sums per user and counts distinct settled rounds", () => {
-    const totals = aggregateSettled([
-      { userId: U(1), roundId: "r1", points: 10 },
-      { userId: U(1), roundId: "r2", points: 5 },
-      { userId: U(2), roundId: "r1", points: 0 },
+describe("aggregatePredictions", () => {
+  it("counts correct and decided predictions per user", () => {
+    const totals = aggregatePredictions([
+      { userId: U(1), correct: true },
+      { userId: U(1), correct: false },
+      { userId: U(1), correct: true },
+      { userId: U(2), correct: false },
     ]);
-    expect(totals.get(U(1))).toMatchObject({ points: 15 });
-    expect(totals.get(U(1))!.rounds.size).toBe(2);
-    expect(totals.get(U(2))).toMatchObject({ points: 0 });
-  });
-
-  it("sums every event kind in a round but counts the round once", () => {
-    // A user who staked AND voted for the fan-favorite has two events (F18);
-    // both count toward points, the round counts once.
-    const totals = aggregateSettled([
-      { userId: U(1), roundId: "r1", points: 10 },
-      { userId: U(1), roundId: "r1", points: 25 },
-      { userId: U(1), roundId: "r2", points: 5 },
-      { userId: U(2), roundId: "r1", points: 0 },
-    ]);
-    expect(totals.get(U(1))).toMatchObject({ points: 40 });
-    expect(totals.get(U(1))!.rounds.size).toBe(2);
-    expect(totals.get(U(2))).toMatchObject({ points: 0 });
-  });
-
-  it("drops malformed points instead of guessing", () => {
-    const totals = aggregateSettled([
-      { userId: U(1), roundId: "r1", points: 10 },
-      { userId: U(1), roundId: "r2", points: -4 },
-      { userId: U(1), roundId: "r3", points: 1.5 },
-    ]);
-    expect(totals.get(U(1))!.points).toBe(10);
+    expect(totals.get(U(1))).toEqual({ correct: 2, decided: 3 });
+    expect(totals.get(U(2))).toEqual({ correct: 0, decided: 1 });
   });
 });
 
 describe("rankEntries", () => {
-  const row = (n: number, points: number, name: string | null = `n${n}`) => ({
-    userId: U(n),
-    displayName: name,
-    points,
-    settledRounds: 1,
-    streak: null,
-  });
+  const row = (
+    n: number,
+    correct: number,
+    name: string | null = `n${n}`,
+    decided = correct + 1,
+  ) => ({ userId: U(n), displayName: name, correct, decided });
 
-  it("uses competition ranking: ties share a rank, next rank skips", () => {
+  it("uses competition ranking on correct predictions", () => {
     const ranked = rankEntries(
-      [row(1, 10), row(2, 30), row(3, 30), row(4, 5)],
+      [row(1, 10), row(2, 30), row(3, 30, "n3", 50), row(4, 5)],
       null,
     );
-    expect(ranked.map((e) => [e.points, e.rank, e.tied])).toEqual([
+    expect(ranked.map((e) => [e.correctPredictions, e.rank, e.tied])).toEqual([
       [30, 1, true],
       [30, 1, true],
       [10, 3, false],
@@ -130,7 +106,7 @@ describe("rankEntries", () => {
   it("flags only the viewer", () => {
     const ranked = rankEntries([row(1, 1), row(2, 2)], U(1));
     expect(ranked.filter((e) => e.isViewer)).toHaveLength(1);
-    expect(ranked.find((e) => e.isViewer)!.points).toBe(1);
+    expect(ranked.find((e) => e.isViewer)!.correctPredictions).toBe(1);
   });
 });
 
@@ -140,7 +116,7 @@ function stubClient(tables: Record<string, unknown[]>) {
   const client = {
     from(table: string) {
       const builder: Record<string, unknown> = {};
-      for (const method of ["select", "in", "gt", "order"]) {
+      for (const method of ["select", "in", "eq", "order"]) {
         builder[method] = (...args: unknown[]) => {
           calls.push({ table, method, args });
           return builder;
@@ -162,18 +138,20 @@ function stubClient(tables: Record<string, unknown[]>) {
 }
 
 describe("getLeaderboard", () => {
-  const score = (n: number, points: number, streak = 0) => ({
+  const wager = (n: number, outcome: "won" | "lost") => ({
     user_id: U(n),
-    total_points: points,
-    current_streak: streak,
+    settlement_outcome: outcome,
   });
 
-  it("ranks by the user_scores balance and counts settled rounds", async () => {
+  it("ranks by correct (won) settled wagers", async () => {
     const { client, calls } = stubClient({
-      user_scores: [score(1, 5, 4), score(2, 3), score(3, 3)],
-      score_events: [
-        { user_id: U(1), round_id: "r1", points: 5 },
-        { user_id: U(1), round_id: "r2", points: 0 },
+      wagers: [
+        wager(1, "won"),
+        wager(1, "won"),
+        wager(1, "lost"),
+        wager(2, "won"),
+        wager(3, "won"),
+        wager(3, "lost"),
       ],
       users: [
         { id: U(1), display_name: "Ada" },
@@ -185,71 +163,62 @@ describe("getLeaderboard", () => {
     const board = await getLeaderboard(client, U(2));
 
     expect(calls).toContainEqual({
-      table: "user_scores",
-      method: "gt",
-      args: ["total_points", 0],
+      table: "wagers",
+      method: "eq",
+      args: ["status", "accepted"],
     });
     expect(calls).toContainEqual({
-      table: "score_events",
+      table: "wagers",
       method: "in",
-      args: ["rounds.status", ["SETTLED", "ARCHIVED"]],
+      args: ["settlement_outcome", ["won", "lost"]],
     });
-    expect(board.entries.map((e) => [e.points, e.rank, e.tied])).toEqual([
-      [5, 1, false],
-      [3, 2, true],
-      [3, 2, true],
+    expect(
+      board.entries.map((e) => [e.correctPredictions, e.rank, e.tied]),
+    ).toEqual([
+      [2, 1, false],
+      [1, 2, true],
+      [1, 2, true],
     ]);
     expect(board.entries[0]).toMatchObject({
       displayName: "Ada",
-      settledRounds: 2,
-      // F18 defines the streak rule and settlement writes the column.
-      streak: 4,
+      decidedPredictions: 3,
     });
-    expect(board.pending).toEqual({ streaks: false, hitRate: true });
     expect(JSON.stringify(board)).not.toContain("example.com");
     expect(board.entries.find((e) => e.isViewer)!.pseudonymous).toBe(true);
   });
 
-  it("skips zero and malformed balances", async () => {
-    const { client } = stubClient({
-      user_scores: [score(1, 0), score(2, 2.5), score(3, 7)],
-      users: [],
-    });
-    const board = await getLeaderboard(client, null);
-    expect(board.entries.map((e) => e.points)).toEqual([7]);
-  });
-
-  it("returns an empty board when no account has points", async () => {
-    const { client, calls } = stubClient({ user_scores: [] });
+  it("returns an empty board when nothing has settled", async () => {
+    const { client, calls } = stubClient({ wagers: [] });
     await expect(getLeaderboard(client, null)).resolves.toEqual({
       entries: [],
       totalRanked: 0,
-      pending: { streaks: false, hitRate: true },
     });
     expect(calls.some((c) => c.table === "users")).toBe(false);
   });
 
   it("ranks an account with a missing profile row under a pseudonym", async () => {
-    const { client } = stubClient({ user_scores: [score(7, 3)], users: [] });
+    const { client } = stubClient({ wagers: [wager(7, "won")], users: [] });
     const board = await getLeaderboard(client, null);
     expect(board.entries[0]).toMatchObject({
       displayName: pseudonymFor(U(7)),
-      settledRounds: 0,
+      correctPredictions: 1,
     });
   });
 
   it("keeps the viewer visible when they rank outside the top list", async () => {
-    const rows = Array.from({ length: LEADERBOARD_LIMIT + 5 }, (_, i) =>
-      score(i + 1, 1000 - i),
-    );
-    const viewer = U(LEADERBOARD_LIMIT + 5);
-    const { client } = stubClient({ user_scores: rows, users: [] });
+    const total = LEADERBOARD_LIMIT + 5;
+    // User i+1 gets (total - i) correct predictions, so the last ranks last.
+    const rows = Array.from({ length: total }, (_, i) =>
+      Array.from({ length: total - i }, () => wager(i + 1, "won")),
+    ).flat();
+    const viewer = U(total);
+    const { client } = stubClient({ wagers: rows, users: [] });
     const board = await getLeaderboard(client, viewer);
-    expect(board.totalRanked).toBe(LEADERBOARD_LIMIT + 5);
+    expect(board.totalRanked).toBe(total);
     expect(board.entries).toHaveLength(LEADERBOARD_LIMIT + 1);
     expect(board.entries.at(-1)).toMatchObject({
       isViewer: true,
-      rank: LEADERBOARD_LIMIT + 5,
+      rank: total,
     });
   });
 
@@ -259,7 +228,7 @@ describe("getLeaderboard", () => {
         const b: Record<string, unknown> = {};
         b.select = () => b;
         b.in = () => b;
-        b.gt = () => b;
+        b.eq = () => b;
         b.order = () => b;
         b.range = () =>
           Promise.resolve({ data: null, error: { message: "boom" } });
@@ -267,7 +236,7 @@ describe("getLeaderboard", () => {
       },
     } as unknown as SupabaseClient;
     await expect(getLeaderboard(client, null)).rejects.toThrow(
-      "Failed to load points balances",
+      "Failed to load settled predictions",
     );
   });
 });

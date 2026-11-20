@@ -57,6 +57,20 @@ export type ResultStatus =
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.
 export type TxStatus = "pending" | "confirmed" | "failed" | "timeout";
 
+// Mirrors the public.tx_purpose enum: the four values in
+// supabase/migrations/20261118100000_init.sql plus the three SOL wagering
+// values added by 20261120000100_sol_wagering_enums.sql — keep them in sync.
+export const TX_PURPOSES = [
+  "prediction_commitment",
+  "round_record",
+  "settlement",
+  "wallet_verification",
+  "wager",
+  "payout",
+  "betting_close",
+] as const;
+export type TxPurpose = (typeof TX_PURPOSES)[number];
+
 // Mirrors the public.execution_run_type enum in
 // supabase/migrations/20261118100000_init.sql — keep the values in sync.
 // `judge` (F31/F17, migration 20261119000700) is the vision model's ruling call;
@@ -315,7 +329,8 @@ export interface ResultSummary {
   conformedModel: string | null;
   /** Name of the crowd's fan-favorite, or null when nobody voted. */
   crowdModel: string | null;
-  poolPoints: number;
+  /** Gross Devnet SOL wagered on the round. */
+  poolSol: number;
   reason: string;
   settledAt: string;
 }
@@ -386,23 +401,25 @@ export interface RoundResult {
     allForfeited: boolean;
   } | null;
   pool: {
-    potPoints: number;
+    /** Gross Devnet SOL wagered on the round. */
+    potSol: number;
     models: Array<{
       modelId: string;
       name: string;
+      /** Devnet SOL wagered on this model. */
       staked: number;
       multiplier: number | null;
       share: number;
     }>;
   };
-  crowd: { counts: Record<string, number>; awardPoints: number } | null;
+  crowd: { counts: Record<string, number> } | null;
   models: ResultModel[];
-  /** The viewer's own stake, or null when signed out / not staked. */
+  /** The viewer's own Devnet SOL wagers, or null when signed out / none. */
   viewerStake: {
     modelId: string;
-    points: number;
+    amountSol: number;
     outcome: "won" | "lost" | "void" | null;
-    awarded: number | null;
+    payoutSol: number | null;
   } | null;
 }
 

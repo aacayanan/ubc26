@@ -6,46 +6,31 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { InternalError } from "@/lib/server/errors/app-error";
 
 /**
- * F24 — user leaderboard.
+ * F24 — user leaderboard, ranked on Devnet SOL predictions.
  *
- * This module only READS what settlement (F18) has finalized; it never
- * computes a payout, a pot split or a fan-favorite award.
+ * The points pool is retired (2026-11-20). A prediction is an accepted
+ * `public.wagers` row; it is *correct* when SOL settlement marked it `won`
+ * and *incorrect* when it marked it `lost`. Refunded wagers (void rounds,
+ * rejected transfers) are neither and do not count.
  *
- * Points: `public.user_scores.total_points` — the account balance, written
- * server-side only (clients hold no write grant), and the same number the
- * profile page shows. Accounts at 0 are not ranked. Decided 2026-11-19 over
- * ranking by the settled ledger alone. If F18 credits starter grants into
- * this column, those grants count toward rank (flagged in REQUIREMENTS.md).
- *
- * Rounds: distinct SETTLED/ARCHIVED rounds in `public.score_events`, the
- * per-round settlement ledger (unique on round_id + user_id).
- *
- * Streaks (F18, settled): a stake that settles `won` extends
- * `user_scores.current_streak`; a loss resets it to 0; a void leaves it
- * unchanged (there was no bet to lose). Fan-favorite awards do not affect
- * streaks. Settlement writes the column, so ranking can show it directly.
- *
- * Score events (F18): one `kind = 'stake'` row per participating user per
- * settled round — including 0-point losses and voids — plus a `kind =
- * 'fan_favorite'` row for crowd-vote winners. Both kinds are summed into the
- * balance, but `rounds` counts a round once even when a user has both.
- *
- * Hit rate stays pending: it needs a per-round "hit" definition wider than the
- * streak rule, which F24 owns.
+ * Rank: correct predictions desc, then a stable opaque key. Accounts with no decided prediction are not
+ * ranked. Wagers are owner-only under RLS, so callers pass a service-role
+ * client; only tallies and sanitized names leave this module.
  */
-export const F18_STREAKS_FINAL = true;
-
-/** Round states whose score events are final and may be ranked. */
-export const SETTLED_ROUND_STATES = ["SETTLED", "ARCHIVED"] as const;
 
 export const LEADERBOARD_LIMIT = 100;
 const PAGE_SIZE = 1000;
 const MAX_NAME_LENGTH = 32;
 
-export interface SettledScoreEvent {
+export interface DecidedPrediction {
   userId: string;
-  roundId: string;
-  points: number;
+  correct: boolean;
+}
+
+export interface PredictionTally {
+  correct: number;
+  /** Settled won + lost predictions. */
+  decided: number;
 }
 
 export interface LeaderboardEntry {
@@ -57,12 +42,8 @@ export interface LeaderboardEntry {
   displayName: string;
   /** True when displayName is a generated pseudonym, not the user's choice. */
   pseudonymous: boolean;
-  points: number;
-  settledRounds: number;
-  /** null until F18 defines the streak rule. */
-  streak: number | null;
-  /** null until F18 exposes the finalized conformance outcome. */
-  hitRate: number | null;
+  correctPredictions: number;
+  decidedPredictions: number;
   isViewer: boolean;
 }
 
@@ -70,7 +51,6 @@ export interface Leaderboard {
   entries: LeaderboardEntry[];
   /** Ranked accounts before truncation to LEADERBOARD_LIMIT. */
   totalRanked: number;
-  pending: { streaks: boolean; hitRate: boolean };
 }
 
 const EMAIL_LIKE = /[^\s@]+@[^\s@]+/;
@@ -111,21 +91,14 @@ export function sanitizeDisplayName(
     : cleaned;
 }
 
-export interface RankInput {
+export interface RankInput extends PredictionTally {
   userId: string;
   displayName: string | null;
-  points: number;
-  settledRounds: number;
-  streak: number | null;
 }
 
 /**
- * Deterministic ranking.
- *
- * Order: points desc, then the opaque key asc. The key is a stable hash, so
- * equal-point accounts always appear in the same order without favouring
- * whoever signed up first and without exposing ids. Rank is competition
- * style: every account on equal points shares the rank, and `tied` is set.
+ * Deterministic ranking: correct desc, opaque key asc. Rank is competition
+ * style — accounts with equal correct predictions share it.
  */
 export function rankEntries(
   rows: RankInput[],
@@ -133,8 +106,8 @@ export function rankEntries(
 ): LeaderboardEntry[] {
   const keyed = rows.map((row) => ({ row, key: opaqueKey(row.userId) }));
   keyed.sort((a, b) =>
-    b.row.points !== a.row.points
-      ? b.row.points - a.row.points
+    b.row.correct !== a.row.correct
+      ? b.row.correct - a.row.correct
       : a.key < b.key
         ? -1
         : a.key > b.key
@@ -144,131 +117,78 @@ export function rankEntries(
 
   const counts = new Map<number, number>();
   for (const { row } of keyed) {
-    counts.set(row.points, (counts.get(row.points) ?? 0) + 1);
+    counts.set(row.correct, (counts.get(row.correct) ?? 0) + 1);
   }
 
   let rank = 0;
   let previous: number | null = null;
   return keyed.map(({ row, key }, index) => {
-    if (row.points !== previous) {
+    if (row.correct !== previous) {
       rank = index + 1;
-      previous = row.points;
+      previous = row.correct;
     }
     const safeName = sanitizeDisplayName(row.displayName);
     return {
       key,
       rank,
-      tied: (counts.get(row.points) ?? 0) > 1,
+      tied: (counts.get(row.correct) ?? 0) > 1,
       displayName: safeName ?? pseudonymFor(row.userId),
       pseudonymous: safeName === null,
-      points: row.points,
-      settledRounds: row.settledRounds,
-      streak: row.streak,
-      hitRate: null,
+      correctPredictions: row.correct,
+      decidedPredictions: row.decided,
       isViewer: viewerId !== null && row.userId === viewerId,
     };
   });
 }
 
-/**
- * Sum settled events per user. Accounts with no settled event are absent
- * (they have nothing to rank on). Malformed points are dropped rather than
- * guessed, so a bad row can never inflate a total.
- *
- * A user can have more than one event in a round — a stake return plus a
- * fan-favorite award (F18). Points from every kind are summed, but the round is
- * counted once, so "Rounds" stays a count of settled rounds rather than events.
- */
-export function aggregateSettled(
-  events: SettledScoreEvent[],
-): Map<string, { points: number; rounds: Set<string> }> {
-  const totals = new Map<string, { points: number; rounds: Set<string> }>();
-  for (const event of events) {
-    if (!Number.isInteger(event.points) || event.points < 0) continue;
-    const current = totals.get(event.userId) ?? {
-      points: 0,
-      rounds: new Set<string>(),
-    };
-    // Every kind counts toward points; the set de-dups the round count.
-    current.points += event.points;
-    current.rounds.add(event.roundId);
-    totals.set(event.userId, current);
+/** Tally decided predictions per user. */
+export function aggregatePredictions(
+  predictions: DecidedPrediction[],
+): Map<string, PredictionTally> {
+  const totals = new Map<string, PredictionTally>();
+  for (const prediction of predictions) {
+    const current = totals.get(prediction.userId) ?? { correct: 0, decided: 0 };
+    current.decided += 1;
+    if (prediction.correct) current.correct += 1;
+    totals.set(prediction.userId, current);
   }
   return totals;
 }
 
-interface ScoreEventRow {
+interface WagerRow {
   user_id: string;
-  round_id: string;
-  points: number;
+  settlement_outcome: string | null;
 }
 
-async function readSettledEvents(
+/** Every accepted wager that settled won or lost, optionally for one user. */
+export async function readDecidedPredictions(
   supabase: SupabaseClient,
-): Promise<SettledScoreEvent[]> {
-  const events: SettledScoreEvent[] = [];
+  userId?: string,
+): Promise<DecidedPrediction[]> {
+  const out: DecidedPrediction[] = [];
   // PostgREST caps a response at 1000 rows; page until a short page.
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("score_events")
-      .select("user_id, round_id, points, rounds!inner(status)")
-      .in("rounds.status", [...SETTLED_ROUND_STATES])
+    let query = supabase
+      .from("wagers")
+      .select("user_id, settlement_outcome")
+      .eq("status", "accepted")
+      .in("settlement_outcome", ["won", "lost"]);
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query
       .order("id")
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      throw new InternalError("Failed to load settled scores", error);
+      throw new InternalError("Failed to load settled predictions", error);
     }
-    const rows = (data ?? []) as unknown as ScoreEventRow[];
+    const rows = (data ?? []) as WagerRow[];
     for (const row of rows) {
-      events.push({
+      out.push({
         userId: row.user_id,
-        roundId: row.round_id,
-        points: row.points,
+        correct: row.settlement_outcome === "won",
       });
     }
-    if (rows.length < PAGE_SIZE) return events;
-  }
-}
-
-export interface ScoreBalance {
-  userId: string;
-  points: number;
-  streak: number;
-}
-
-interface UserScoreRow {
-  user_id: string;
-  total_points: number;
-  current_streak: number;
-}
-
-/** Accounts with a positive balance. Malformed balances are skipped. */
-async function readBalances(supabase: SupabaseClient): Promise<ScoreBalance[]> {
-  const balances: ScoreBalance[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("user_scores")
-      .select("user_id, total_points, current_streak")
-      .gt("total_points", 0)
-      .order("user_id")
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      throw new InternalError("Failed to load points balances", error);
-    }
-    const rows = (data ?? []) as UserScoreRow[];
-    for (const row of rows) {
-      if (!Number.isInteger(row.total_points) || row.total_points <= 0) {
-        continue;
-      }
-      balances.push({
-        userId: row.user_id,
-        points: row.total_points,
-        streak: row.current_streak ?? 0,
-      });
-    }
-    if (rows.length < PAGE_SIZE) return balances;
+    if (rows.length < PAGE_SIZE) return out;
   }
 }
 
@@ -276,15 +196,10 @@ export async function getLeaderboard(
   supabase: SupabaseClient,
   viewerId: string | null,
 ): Promise<Leaderboard> {
-  const pending = { streaks: !F18_STREAKS_FINAL, hitRate: true };
-  const balances = await readBalances(supabase);
+  const totals = aggregatePredictions(await readDecidedPredictions(supabase));
+  if (totals.size === 0) return { entries: [], totalRanked: 0 };
 
-  if (balances.length === 0) {
-    return { entries: [], totalRanked: 0, pending };
-  }
-
-  const settled = aggregateSettled(await readSettledEvents(supabase));
-  const userIds = balances.map((balance) => balance.userId);
+  const userIds = [...totals.keys()];
   const names = new Map<string, string | null>();
 
   for (let i = 0; i < userIds.length; i += PAGE_SIZE) {
@@ -306,13 +221,11 @@ export async function getLeaderboard(
   }
 
   const ranked = rankEntries(
-    balances.map((balance) => ({
-      userId: balance.userId,
+    userIds.map((userId) => ({
+      userId,
       // A missing profile row reads as no name -> pseudonym, not an error.
-      displayName: names.get(balance.userId) ?? null,
-      points: balance.points,
-      settledRounds: settled.get(balance.userId)?.rounds.size ?? 0,
-      streak: F18_STREAKS_FINAL ? balance.streak : null,
+      displayName: names.get(userId) ?? null,
+      ...totals.get(userId)!,
     })),
     viewerId,
   );
@@ -322,5 +235,5 @@ export async function getLeaderboard(
   const viewerRow = ranked.find((entry) => entry.isViewer);
   if (viewerRow && !top.includes(viewerRow)) top.push(viewerRow);
 
-  return { entries: top, totalRanked: ranked.length, pending };
+  return { entries: top, totalRanked: ranked.length };
 }

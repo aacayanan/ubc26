@@ -35,7 +35,7 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
         <div className="border-t border-hairline">
           <div className="shell flex flex-wrap items-center justify-between gap-2 py-5">
             <p className="t-mono text-[0.625rem] tracking-[0.1em] text-faint">
-              POINTS AND LEADERBOARDS ONLY — NO REAL MONEY
+              DEVNET TEST SOL ONLY — NO REAL MONEY
             </p>
             <p className="t-mono text-[0.625rem] tracking-[0.1em] text-faint">
               SOLANA DEVNET

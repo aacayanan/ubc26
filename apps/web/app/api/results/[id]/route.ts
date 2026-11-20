@@ -58,7 +58,7 @@ export async function GET(
               }
             : null,
           pool: {
-            pot_points: result.pool.potPoints,
+            pot_sol: result.pool.potSol,
             models: result.pool.models.map((m) => ({
               model_id: m.modelId,
               name: m.name,
@@ -67,9 +67,7 @@ export async function GET(
               share: m.share,
             })),
           },
-          crowd: result.crowd
-            ? { counts: result.crowd.counts, award_points: result.crowd.awardPoints }
-            : null,
+          crowd: result.crowd ? { counts: result.crowd.counts } : null,
           models: result.models.map((m) => ({
             model_id: m.modelId,
             name: m.name,
@@ -89,9 +87,9 @@ export async function GET(
           viewer_stake: result.viewerStake
             ? {
                 model_id: result.viewerStake.modelId,
-                points: result.viewerStake.points,
+                amount_sol: result.viewerStake.amountSol,
                 outcome: result.viewerStake.outcome,
-                awarded: result.viewerStake.awarded,
+                payout_sol: result.viewerStake.payoutSol,
               }
             : null,
         },

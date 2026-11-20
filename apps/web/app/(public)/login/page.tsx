@@ -24,11 +24,11 @@ export default function LoginPage() {
             Three models write the same brief.
           </p>
           <p className="t-body mt-5 max-w-[34ch] text-sm text-muted">
-            Stake your points before the clock stops. Then watch what they drew,
-            and vote on which one was best.
+            Predict with Devnet SOL before the clock stops. Then watch what they
+            drew, and vote on which one was best.
           </p>
           <p className="t-mono mt-10 text-[0.625rem] tracking-[0.14em] text-faint">
-            POINTS ONLY · NO REAL MONEY
+            DEVNET TEST SOL ONLY · NO REAL MONEY
           </p>
         </div>
       </div>

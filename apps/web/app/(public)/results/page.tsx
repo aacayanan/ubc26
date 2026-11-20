@@ -13,7 +13,7 @@ interface ResultEntry {
   display_state: ResultDisplayState;
   conformed_model: string | null;
   crowd_model: string | null;
-  pool_points: number;
+  pool_sol: number;
   reason: string;
   settled_at: string;
 }
@@ -162,8 +162,8 @@ export default function ResultsPage() {
 
                   <p className="t-body mt-2 text-xs text-faint">
                     {r.kind === "voided"
-                      ? "No points moved. Every stake was returned."
-                      : `Pool split: ${r.pool_points.toLocaleString()} pts, pro-rata among backers of the conforming model.`}
+                      ? "No winner. Every wager was refunded."
+                      : `Pool split: ${r.pool_sol.toLocaleString(undefined, { maximumFractionDigits: 3 })} Devnet SOL, pro-rata among backers of the conforming model.`}
                   </p>
                 </Link>
               </li>

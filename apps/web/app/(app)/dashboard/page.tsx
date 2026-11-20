@@ -70,12 +70,13 @@ function ProfileUnavailable() {
 
 function InstrumentStrip({ profile }: { profile: Profile }) {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[18px] border border-hairline bg-hairline shadow-[0_28px_70px_-34px_rgb(0_0_0/0.95)] backdrop-blur-xl sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[18px] border border-hairline bg-hairline shadow-[0_28px_70px_-34px_rgb(0_0_0/0.95)] backdrop-blur-xl sm:grid-cols-2">
       {[
-        { label: "Points", value: profile.points.toLocaleString() },
+        {
+          label: "Correct predictions",
+          value: profile.correctPredictions,
+        },
         { label: "Predictions", value: profile.predictions },
-        { label: "Streak", value: profile.currentStreak },
-        { label: "Best streak", value: profile.longestStreak },
       ].map((s) => (
         <div key={s.label} className="bg-[rgb(11_9_18/0.62)] px-5 py-5">
           <Readout label={s.label} value={s.value} />
@@ -102,7 +103,17 @@ export default async function DashboardPage() {
     throw error;
   }
 
-  const greeting = profile.displayName ?? user.email?.split("@")[0] ?? "there";
+  // A Sign in with Solana account has no email (Supabase stores ""), so fall
+  // back to a shortened wallet address rather than an empty greeting.
+  const walletAddress = (
+    user.user_metadata?.custom_claims as { address?: unknown } | undefined
+  )?.address;
+  const greeting =
+    profile.displayName?.trim() ||
+    user.email?.split("@")[0] ||
+    (typeof walletAddress === "string" && walletAddress.length > 8
+      ? `${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`
+      : "there");
 
   // F9: the dashboard's open-round list. A failure here must not take the whole
   // page down — the profile strip is still worth showing — so it degrades to an
@@ -220,9 +231,11 @@ export default async function DashboardPage() {
                           />
                         </span>
                         <span className="t-num text-[0.875rem] text-ink">
-                          {round.potentialPoints.toLocaleString()}
+                          {round.poolSol.toLocaleString(undefined, {
+                            maximumFractionDigits: 3,
+                          })}
                           <span className="t-mono ml-1 text-[0.5625rem] text-faint">
-                            pts pool
+                            Devnet SOL pool
                           </span>
                         </span>
                       </div>

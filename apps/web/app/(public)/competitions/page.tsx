@@ -162,11 +162,13 @@ function RoundCard({
         <div className="shrink-0 text-right">
           <p className="t-label text-[0.5625rem] text-faint">Pot</p>
           <p className="t-num mt-1.5 text-[1.375rem] leading-none text-ink">
-            {round.pot.toLocaleString()}
-            <span className="ml-1 text-xs text-muted">pts</span>
+            {round.pot.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+            <span className="ml-1 text-xs text-muted">SOL</span>
           </p>
           <p className="t-mono mt-1.5 text-[0.5625rem] text-faint">
-            {round.pot > 0 ? "splits among the winner's backers" : "no stakes yet"}
+            {round.pot > 0
+              ? "splits among the winner's backers"
+              : "no wagers yet"}
           </p>
         </div>
       </div>
@@ -197,7 +199,10 @@ function RoundCard({
                 <span className="text-[0.625rem] text-faint">%</span>
               </span>
               <span className="t-mono text-[0.5625rem] text-faint">
-                {model.staked.toLocaleString()} pts
+                {(model.staked / 1_000_000_000).toLocaleString(undefined, {
+                  maximumFractionDigits: 3,
+                })}{" "}
+                SOL
               </span>
             </div>
             {/* Same weight of pale ink as this model's line would be. */}
@@ -255,7 +260,7 @@ export default function CompetitionsPage() {
             challenge_preview: string;
             models: string[];
             deadline: string;
-            potential_points: number;
+            pool_sol: number;
             pool_capacity: number;
             odds: Array<{
               model_id: string;
@@ -293,7 +298,7 @@ export default function CompetitionsPage() {
             preview: competition.challenge_preview,
             models: competition.models,
             deadline: competition.deadline,
-            pot: competition.potential_points,
+            pot: competition.pool_sol ?? 0,
             capacity: competition.pool_capacity,
             odds: (competition.odds ?? []).map((model) => ({
               modelId: model.model_id,

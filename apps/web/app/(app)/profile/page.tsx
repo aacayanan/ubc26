@@ -91,12 +91,13 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-4">
+          <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-hairline bg-hairline sm:grid-cols-2">
             {[
-              { label: "Points", value: profile.points.toLocaleString() },
+              {
+                label: "Correct predictions",
+                value: profile.correctPredictions,
+              },
               { label: "Predictions", value: profile.predictions },
-              { label: "Streak", value: profile.currentStreak },
-              { label: "Best streak", value: profile.longestStreak },
             ].map((s) => (
               <div key={s.label} className="bg-[rgb(11_9_18/0.62)] px-4 py-4">
                 <Readout label={s.label} value={s.value} />

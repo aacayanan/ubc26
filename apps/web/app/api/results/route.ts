@@ -24,7 +24,7 @@ export async function GET(request: Request) {
           display_state: row.displayState,
           conformed_model: row.conformedModel,
           crowd_model: row.crowdModel,
-          pool_points: row.poolPoints,
+          pool_sol: row.poolSol,
           reason: row.reason,
           settled_at: row.settledAt,
         })),
