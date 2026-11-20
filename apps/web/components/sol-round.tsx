@@ -134,6 +134,11 @@ async function connectPhantom(): Promise<string> {
   return result.publicKey.toBase58();
 }
 
+/** Lamports as SOL, rounded up to 4 decimals so it always clears the minimum. */
+function minimumSol(lamports: string): string {
+  return (Math.ceil(Number(lamports) / 100_000) / 10_000).toFixed(4);
+}
+
 export function SolRound({
   roundId,
   status,
@@ -148,7 +153,13 @@ export function SolRound({
   const [pool, setPool] = useState<Pool | null>(null);
   const [mine, setMine] = useState<Mine | null>(null);
   const [selected, setSelected] = useState("");
-  const [amount, setAmount] = useState("0.01");
+  const [amount, setAmount] = useState("");
+  // The $3 live minimum in lamports at the current reference price (advisory;
+  // the server re-checks it when the wager is prepared).
+  const [liveMinimum, setLiveMinimum] = useState<{
+    usdCents: number;
+    lamports: string;
+  } | null>(null);
   const [step, setStep] = useState<Step>({ kind: "idle" });
   const [wallet, setWallet] = useState<string | null>(null);
   // Wall-clock read in the poll tick, never during render.
@@ -167,9 +178,11 @@ export function SolRound({
       const body = (await poolResponse.json()) as {
         pool: Pool;
         mine: Mine | null;
+        liveMinimum?: { usdCents: number; lamports: string } | null;
       };
       setPool(body.pool);
       setMine(body.mine);
+      setLiveMinimum(body.liveMinimum ?? null);
     }
   }, [roundId]);
 
@@ -225,7 +238,12 @@ export function SolRound({
           body: JSON.stringify({
             modelId: selected,
             kind,
-            sol: kind === "live" ? amount : undefined,
+            // A blank amount bets the current $3 minimum.
+            sol:
+              kind === "live"
+                ? amount.trim() ||
+                  (liveMinimum ? minimumSol(liveMinimum.lamports) : "")
+                : undefined,
             wallet: address,
           }),
         },
@@ -489,15 +507,26 @@ export function SolRound({
                   id="sol-amount"
                   inputMode="decimal"
                   value={amount}
+                  placeholder={
+                    liveMinimum ? minimumSol(liveMinimum.lamports) : undefined
+                  }
                   onChange={(e) => setAmount(e.target.value)}
+                  aria-describedby="sol-amount-hint"
                   className="field t-num"
                 />
                 <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
                   SOL
                 </span>
               </div>
-              <p className="t-mono mt-2 text-[0.625rem] text-faint">
-                0.005–0.25 SOL · up to 10 live wagers · 1 SOL per round
+              <p
+                id="sol-amount-hint"
+                className="t-mono mt-2 text-[0.625rem] text-faint"
+              >
+                minimum $3.00
+                {liveMinimum
+                  ? ` (≈ ${minimumSol(liveMinimum.lamports)} SOL now)`
+                  : ""}{" "}
+                · no maximum · up to 10 live wagers per round
               </p>
             </div>
           ) : (
