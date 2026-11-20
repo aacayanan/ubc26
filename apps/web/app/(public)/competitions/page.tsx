@@ -10,8 +10,6 @@ import {
   PageHeader,
   Panel,
   Status,
-  roundLabel,
-  roundTone,
 } from "@/components/ui";
 import { formatMultiplier } from "@/lib/odds";
 
@@ -77,15 +75,7 @@ function LiveStrip({ rounds }: { rounds: LiveRound[] }) {
               href={`/competitions/${round.id}`}
               className="panel panel-interactive flex h-full flex-col p-4"
             >
-              <div className="flex items-center justify-between gap-2">
-                <Status
-                  tone={roundTone(round.status)}
-                  pulse={
-                    round.status === "RUNNING" || round.status === "EVALUATING"
-                  }
-                >
-                  {roundLabel(round.status)}
-                </Status>
+              <div className="flex items-center justify-end gap-2">
                 <span className="t-num shrink-0 text-[0.8125rem] leading-none text-ink">
                   {round.done}
                   <span className="text-[0.6875rem] text-faint">
@@ -144,12 +134,10 @@ function RoundCard({
       href={`/competitions/${round.id}`}
       className="panel panel-interactive group flex h-full flex-col p-4"
     >
-      {/* State and clock share the top line: what this tile is and how long it
-          stays that way. The countdown is the tile's live element. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <Status tone="live" pulse>
-          Staking open
-        </Status>
+      {/* The clock is the tile's live element. The state badge that used to sit
+          beside it ("Staking open") is gone: an open round is the only thing
+          this list shows, so the badge repeated the page's own heading. */}
+      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
         <span className="t-mono flex items-center gap-1.5 text-[0.625rem] text-muted">
           <span className="text-faint">closes</span>
           <CountdownReadout
@@ -167,15 +155,20 @@ function RoundCard({
         {round.preview}
       </p>
 
-      {/* Only the payout column is named. The boxed numeral is the model's
-          share of the pot — the same number its underline already draws — so a
-          label over it would name something the reader can see. */}
+      {/* Both columns are named, matching the round page's board. The numeral
+          under `chance` is the model's share of the pot, and naming it is what
+          makes that legible: the underline draws the same value but says
+          nothing about what it measures, so an unlabelled `42%` had to be
+          reverse-engineered from the bar beside it. `payout` and `chance` read
+          as the pair they are — how likely, and what it pays. */}
       <div className="mt-3 flex items-baseline gap-2.5 px-1.5">
         <span className="min-w-0 flex-1" />
         <span className="t-label hidden shrink-0 text-[0.5rem] text-faint sm:block">
           payout
         </span>
-        <span className="w-[2.9rem] shrink-0" />
+        <span className="t-label flex w-[2.9rem] shrink-0 justify-center text-[0.5rem] text-faint">
+          chance
+        </span>
       </div>
 
       {/* The three prices. One row per contender, the same language as the
@@ -403,26 +396,6 @@ export default function CompetitionsPage() {
         )}
       </div>
 
-      {/* A legend, not a panel. It says what the two live states mean in one
-          reading, so it sits on the page's own ground under a hairline rather
-          than in a surface that competes with the rounds above it. */}
-      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-hairline pt-5">
-        <Status tone="live" pulse>
-          Staking
-        </Status>
-        <p className="t-body text-[0.8125rem] text-muted">
-          Open rounds accept stakes until the deadline. The multiplier moves
-          only as other people stake.
-        </p>
-        <span
-          aria-hidden="true"
-          className="hidden h-3 w-px shrink-0 bg-hairline sm:block"
-        />
-        <Status tone="violet">Locked</Status>
-        <p className="t-body text-[0.8125rem] text-muted">
-          Locked rounds are rendering, being judged, or settled.
-        </p>
-      </div>
     </div>
   );
 }

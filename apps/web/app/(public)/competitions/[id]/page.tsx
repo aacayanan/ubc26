@@ -7,14 +7,7 @@ import { CountdownReadout } from "@/components/countdown";
 import { SolRound } from "@/components/sol-round";
 import { LiveRoundPanel } from "@/components/live-round-panel";
 import { describeDeadline } from "@/lib/countdown";
-import {
-  CrosshairMark,
-  Panel,
-  RoundHash,
-  Status,
-  roundLabel,
-  roundTone,
-} from "@/components/ui";
+import { CrosshairMark, Panel, RoundHash } from "@/components/ui";
 
 interface RoundDetail {
   id: string;
@@ -243,13 +236,10 @@ export default function CompetitionDetailPage() {
         </header>
       ) : (
         <Panel className="px-7 py-6">
+          {/* The phase badge that used to sit here ("Staking open") is gone: the
+              sentence below states the phase, and the board below that states it
+              again. The countdown stays — it is the only live element. */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Status
-              tone={roundTone(round.state)}
-              pulse={round.state === "OPEN"}
-            >
-              {roundLabel(round.state)}
-            </Status>
             <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
               <span className="text-faint">closes in</span>
               <CountdownReadout
@@ -295,11 +285,7 @@ export default function CompetitionDetailPage() {
         deadline={round.deadline}
         models={round.models}
       />
-      <LiveRoundPanel
-        roundId={round.id}
-        initialStatus={round.state}
-        className="mt-5"
-      />
+      <LiveRoundPanel roundId={round.id} className="mt-5" />
     </div>
   );
 }

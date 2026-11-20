@@ -42,6 +42,12 @@ const VIEW_H = 100;
 /** Width of the "if you send now" strip beyond the now line. */
 const GHOST_W = 96;
 const GRID = [0, 0.25, 0.5, 0.75, 1];
+/**
+ * Vertical inset so a line at 0% or 100% is not clipped by the frame edge.
+ * A one-sided market is a real reading — a model nobody backed, or the only
+ * backed model — and it has to be visible, not pressed flat against the border.
+ */
+const PAD = 2;
 
 /**
  * One ink code for the whole board: a model's line in the chart, and the bar
@@ -131,9 +137,9 @@ export function PriceRibbon({
           <line
             key={value}
             x1={0}
-            y1={VIEW_H * (1 - value)}
+            y1={y(value)}
             x2={width}
-            y2={VIEW_H * (1 - value)}
+            y2={y(value)}
             stroke="rgb(255 255 255 / 0.06)"
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
@@ -146,9 +152,9 @@ export function PriceRibbon({
         {models.length === 3 ? (
           <line
             x1={0}
-            y1={VIEW_H * (1 - 1 / 3)}
+            y1={y(1 / 3)}
             x2={width}
-            y2={VIEW_H * (1 - 1 / 3)}
+            y2={y(1 / 3)}
             stroke="rgb(255 255 255 / 0.14)"
             strokeWidth={1}
             strokeDasharray="1 3"
@@ -161,7 +167,7 @@ export function PriceRibbon({
           {models
             .map((model, index) => {
               const ys = points.map((sample) =>
-                VIEW_H * (1 - clamp01(sample.shares[index] ?? 0)),
+                y(clamp01(sample.shares[index] ?? 0)),
               );
               const isPicked = model.id === pickedModelId;
               return { model, index, ys, isPicked };
@@ -192,8 +198,8 @@ export function PriceRibbon({
         {/* The draft: where each line would land, dashed, in the reserved strip. */}
         {projected
           ? projected.map((share, index) => {
-              const from = VIEW_H * (1 - clamp01(points[points.length - 1]?.shares[index] ?? 0));
-              const to = VIEW_H * (1 - clamp01(share));
+              const from = y(clamp01(points[points.length - 1]?.shares[index] ?? 0));
+              const to = y(clamp01(share));
               const isPicked = models[index]?.id === pickedModelId;
               return (
                 <g key={`projected-${models[index]?.id ?? index}`}>
@@ -305,6 +311,11 @@ function stepPath(ys: number[], xs: number[]): string {
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
+}
+
+/** Share 0..1 → a y inside the padded frame. */
+function y(share: number): number {
+  return PAD + (VIEW_H - PAD * 2) * (1 - clamp01(share));
 }
 
 /** How much of the pool's life this trace covers: `4m`, `1h 20m`, `2d`. */

@@ -3,8 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Transaction } from "@solana/web3.js";
 import { CountdownReadout } from "@/components/countdown";
-import { Meter, Panel, Status } from "@/components/ui";
+import {
+  SolMarketBoard,
+  appendPriceSample,
+  type BoardPool,
+} from "@/components/sol-market-board";
+import type { PriceSample } from "@/components/price-ribbon";
+import {
+  Meter,
+  Panel,
+  RoundBento,
+  Status,
+  type BentoStat,
+} from "@/components/ui";
 import { VerifyCommitment } from "@/components/verify-commitment";
+import { formatMultiplier } from "@/lib/odds";
 import { formatSol } from "@/lib/sol-pool";
 
 /**
@@ -153,6 +166,10 @@ export function SolRound({
   const [wallet, setWallet] = useState<string | null>(null);
   // Wall-clock read in the poll tick, never during render.
   const [now, setNow] = useState(0);
+  // Price readings, recorded where the pool was actually observed. A poll that
+  // returns the same numbers adds nothing (appendPriceSample), so an idle
+  // market's trace stays flat instead of looking busy.
+  const [samples, setSamples] = useState<PriceSample[]>([]);
 
   const names = useMemo(
     () => new Map(models.map((m) => [m.id, m.name])),
@@ -170,8 +187,11 @@ export function SolRound({
       };
       setPool(body.pool);
       setMine(body.mine);
+      setSamples((previous) =>
+        appendPriceSample(previous, body.pool as BoardPool, models),
+      );
     }
-  }, [roundId]);
+  }, [roundId, models]);
 
   useEffect(() => {
     let active = true;
@@ -303,24 +323,93 @@ export function SolRound({
   const busy = step.kind === "working";
   const budget = pool?.tokenBudgetPerModel ?? null;
   const cutoff = (pool?.cutoffBps ?? 7500) / 10_000;
-  const poolByModel = new Map((pool?.models ?? []).map((m) => [m.modelId, m]));
+  // What this account already has in the pool: the ante plus any accepted live
+  // wagers. The board uses it to price the draft as an addition and to enforce
+  // the round's 1 SOL ceiling before a signature is wasted.
+  const alreadyStaked = (mine?.wagers ?? [])
+    .filter((w) => w.status === "accepted")
+    .reduce((total, w) => total + lamports(w.lamports), BigInt(0));
+
+  // The statistics grid exists only while the round is still open. The moment
+  // it locks, every tile disappears and the page is the live show — the market
+  // board, the token meters and the renders — so nothing on screen can be read
+  // as a pre-deadline reading after the deadline has passed. An unparseable
+  // deadline counts as passed: a clock we cannot read must never look safe to
+  // stake on (the same rule `describeDeadline` applies).
+  const deadlineMs = Date.parse(deadline);
+  const deadlinePassed =
+    !Number.isFinite(deadlineMs) || (now > 0 && now >= deadlineMs);
+  const statsOpen = status === "OPEN" && !deadlinePassed;
+
+  // The bento: every pre-deadline statistic in one instrument grid. Each value
+  // is a pool aggregate or the round's own configuration — nothing invented —
+  // and before the pool answers, a tile simply reads "—".
+  const bestPayout = (pool?.models ?? [])
+    .map((m) => m.multiplier)
+    .filter((m): m is number => m !== null)
+    .reduce<number | null>(
+      (best, m) => (best === null || m > best ? m : best),
+      null,
+    );
+  const bentoStats: BentoStat[] = [
+    {
+      label: "The pool",
+      value: pool ? formatSol(lamports(pool.grossLamports)) : "—",
+      suffix: pool ? "SOL" : undefined,
+      note:
+        pool && pool.pendingWagers > 0
+          ? `${pool.pendingWagers} wagers confirming`
+          : "Devnet test SOL",
+    },
+    {
+      label: "Backers",
+      value: pool ? String(pool.bettors) : "—",
+      note: "distinct wallets in the pool",
+    },
+    {
+      label: "Wagers",
+      value: pool ? String(pool.acceptedWagers) : "—",
+      note: "ante and live, accepted",
+    },
+    {
+      label: "The ante",
+      value: `$${((pool?.anteUsdCents ?? 500) / 100).toFixed(2)}`,
+      note: "paid in Devnet SOL",
+    },
+    {
+      label: "Betting cutoff",
+      value: String(Math.round(cutoff * 100)),
+      suffix: "%",
+      note: "of each model's token budget",
+    },
+    {
+      label: "Token budget",
+      value: budget ? budget.toLocaleString() : "—",
+      suffix: budget ? "tokens" : undefined,
+      note: "output tokens per model",
+    },
+    {
+      label: "Best payout",
+      value: bestPayout === null ? "—" : formatMultiplier(bestPayout),
+      note:
+        bestPayout === null ? "no backers yet" : "if that model conforms alone",
+    },
+    {
+      label: "Winning-round fee",
+      value: pool ? String(pool.feeBps / 100) : "—",
+      suffix: pool ? "%" : undefined,
+      note: "deducted before the split",
+    },
+  ];
 
   return (
     <div className="space-y-3">
-      {/* Betting state */}
+      {/* Betting state. The phase badge that used to sit here ("Ante open",
+          "Live betting open") is gone: the sentence below states the phase in
+          full, and the board's own ticket says what to do about it. */}
       <Panel className="p-7">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Status
-            tone={phase === "closed" ? "ink" : "live"}
-            pulse={phase !== "closed"}
-          >
-            {phase === "ante"
-              ? "Ante open"
-              : phase === "live"
-                ? "Live betting open"
-                : "Betting closed"}
-          </Status>
-          {anteOpen ? (
+        {anteOpen ? (
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <span className="t-mono flex items-center gap-1.5 text-[0.6875rem] text-muted">
               <span className="text-faint">ante closes in</span>
               <CountdownReadout
@@ -328,22 +417,65 @@ export function SolRound({
                 className="t-num text-ink"
               />
             </span>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
         <p className="t-body mt-4 text-sm text-muted">
-          {phase === "ante"
+          {phase === "ante" && anteOpen
             ? "Place the $5-equivalent ante in Devnet SOL to join this round. Live betting opens when generation starts."
-            : phase === "live"
-              ? `Betting closes the moment any model reaches ${Math.round(cutoff * 100)}% of its output-token budget, or earlier if a model finishes or fails.`
-              : pool?.bettingCloseReason
-                ? `Closed because ${pool.bettingCloseModelId ? `${names.get(pool.bettingCloseModelId) ?? "a model"} ` : ""}${CLOSE_REASON[pool.bettingCloseReason] ?? pool.bettingCloseReason}.${pool.final ? " Final pool locked." : ""}`
-                : "Betting is closed."}
+            : phase === "ante"
+              ? "The ante window closed with the deadline. Live betting opens the moment generation starts."
+              : phase === "live"
+                ? `Betting closes the moment any model reaches ${Math.round(cutoff * 100)}% of its output-token budget, or earlier if a model finishes or fails.`
+                : pool?.bettingCloseReason
+                  ? `Closed because ${pool.bettingCloseModelId ? `${names.get(pool.bettingCloseModelId) ?? "a model"} ` : ""}${CLOSE_REASON[pool.bettingCloseReason] ?? pool.bettingCloseReason}.${pool.final ? " Final pool locked." : ""}`
+                  : "Betting is closed."}
         </p>
         <p className="t-mono mt-3 text-[0.625rem] text-faint">
           Devnet test SOL only · no real value ·{" "}
           {pool ? `${pool.feeBps / 100}% fee on winning rounds` : ""}
         </p>
       </Panel>
+
+      {/* The statistics a viewer scans before staking — pool, backers, clock,
+          cutoff, payout. They exist only while the round is open: once it
+          locks these numbers are no longer a decision input, so the grid
+          unmounts and the live show takes the page. */}
+      {statsOpen ? <RoundBento stats={bentoStats} /> : null}
+
+      {/* The market: the price trace, the three sides, and the ticket. This is
+          the way to place a wager — pick a side on the chart, drag the stake,
+          see the projection move before the signature. */}
+      {pool ? (
+        <SolMarketBoard
+          models={models}
+          pool={pool}
+          selected={selected}
+          onSelect={setSelected}
+          amount={amount}
+          onAmount={setAmount}
+          samples={samples}
+          alreadyStaked={alreadyStaked}
+          drafting={Boolean(canLive)}
+          ante={Boolean(canAnte)}
+          busy={busy || confirming}
+          busyLabel={
+            step.kind === "working"
+              ? step.label
+              : confirming
+                ? "Waiting for your last wager…"
+                : undefined
+          }
+          onSubmit={() => placeWager(canAnte ? "ante" : "live")}
+          ctaLabel={
+            canAnte ? "Sign the ante in Phantom" : "Sign this wager in Phantom"
+          }
+          anteNote={
+            canAnte
+              ? `${((pool.anteUsdCents ?? 500) / 100).toFixed(2)} USD in Devnet SOL at the current SOL/USD reference price`
+              : undefined
+          }
+        />
+      ) : null}
 
       {/* Live generation with token meters */}
       <Panel className="p-7">
@@ -384,150 +516,23 @@ export function SolRound({
         </div>
       </Panel>
 
-      {/* Pool */}
-      <Panel className="p-7">
-        <div className="flex items-center justify-between">
-          <h2 className="t-title text-[1rem] text-ink">The pool</h2>
-          <span className="t-num text-[0.8125rem] text-muted">
-            {sol(pool?.grossLamports)}
-          </span>
-        </div>
-        <p className="t-mono mt-1 text-[0.625rem] text-faint">
-          {pool?.settlement
-            ? "settled returns"
-            : pool?.final
-              ? "pool locked · returns depend on the outcome"
-              : "estimated payout multipliers · change until betting closes"}
-          {pool && pool.pendingWagers > 0
-            ? ` · ${pool.pendingWagers} confirming`
-            : ""}
-        </p>
-        <div className="mt-4 space-y-2">
-          {models.map((model) => {
-            const entry = poolByModel.get(model.id);
-            return (
-              <div
-                key={model.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-hairline px-4 py-3"
-              >
-                <span className="text-[0.8125rem] text-ink">{model.name}</span>
-                <span className="t-num text-[0.75rem] text-muted">
-                  {sol(entry?.stakedLamports)} ·{" "}
-                  <span className="text-ink">
-                    {entry?.multiplier
-                      ? `${entry.multiplier.toFixed(2)}×${pool?.settlement ? "" : " est."}`
-                      : "no backers"}
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <p className="t-body mt-3 text-xs text-faint">
+      {/* The rules, once. The board above carries the prices; this carries the
+          settlement logic and the wallet the signature came from. */}
+      <Panel quiet className="p-6">
+        <p className="t-body text-xs leading-relaxed text-faint">
           Parimutuel: the pool, minus the disclosed fee, is split pro-rata among
           backers of the model that conforms. Tied winners split by dead heat.
           If nobody backed a winner, or the round is void, every wager is
           refunded in full.
         </p>
+        <p className="t-mono mt-3 text-[0.625rem] leading-relaxed text-faint">
+          one transaction: SOL transfer + memo commitment · Phantom must be in
+          Devnet (testnet mode)
+          {wallet ? ` · ${wallet.slice(0, 4)}…${wallet.slice(-4)}` : ""}
+        </p>
       </Panel>
 
-      {/* Wager form */}
-      {mine && (canAnte || canLive) ? (
-        <Panel className="p-7">
-          <h2 className="t-title text-[1rem] text-ink">
-            {canAnte ? "Place your $5 ante" : "Place a live wager"}
-          </h2>
-          <fieldset className="mt-5" disabled={busy || confirming}>
-            <legend className="t-label text-[0.5625rem] text-faint">
-              Which model conforms?
-            </legend>
-            <div className="mt-2.5 space-y-2">
-              {models.map((m) => {
-                const active = selected === m.id;
-                return (
-                  <label
-                    key={m.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-violet ${
-                      active
-                        ? "border-magenta bg-magenta/[0.07]"
-                        : "border-[var(--control-line)] bg-white/[0.015] hover:border-white/45"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="sol-model"
-                      value={m.id}
-                      checked={active}
-                      onChange={() => setSelected(m.id)}
-                      className="sr-only"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className={`grid size-[15px] shrink-0 place-items-center rounded-full border ${active ? "border-magenta" : "border-white/40"}`}
-                    >
-                      <span
-                        className={`size-[7px] rounded-full ${active ? "bg-magenta" : "bg-transparent"}`}
-                      />
-                    </span>
-                    <span className="text-[0.875rem] text-ink">{m.name}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-
-          {canLive ? (
-            <div className="mt-5">
-              <label
-                htmlFor="sol-amount"
-                className="t-label block text-[0.5625rem] text-faint"
-              >
-                Amount
-              </label>
-              <div className="mt-2.5 flex items-center gap-2">
-                <input
-                  id="sol-amount"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="field t-num"
-                />
-                <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
-                  SOL
-                </span>
-              </div>
-              <p className="t-mono mt-2 text-[0.625rem] text-faint">
-                0.005–0.25 SOL · up to 10 live wagers · 1 SOL per round
-              </p>
-            </div>
-          ) : (
-            <p className="t-mono mt-4 text-[0.625rem] text-faint">
-              ${((pool?.anteUsdCents ?? 500) / 100).toFixed(2)} in Devnet SOL at
-              the current SOL/USD reference price
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={() => placeWager(canAnte ? "ante" : "live")}
-            disabled={busy || confirming || !selected}
-            className="btn btn-solid btn-block mt-6"
-          >
-            {busy
-              ? step.label
-              : confirming
-                ? "Waiting for your last wager…"
-                : canAnte
-                  ? "Sign the ante in Phantom"
-                  : "Sign this wager in Phantom"}
-          </button>
-          <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
-            one transaction: SOL transfer + memo commitment · Phantom must be in
-            Devnet (testnet mode)
-            {wallet ? ` · ${wallet.slice(0, 4)}…${wallet.slice(-4)}` : ""}
-          </p>
-        </Panel>
-      ) : mine && !mine.canWager ? (
+      {mine && !mine.canWager ? (
         <Panel quiet className="p-6">
           <p className="t-body text-sm text-muted">
             Staff accounts can watch but not wager.
