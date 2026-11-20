@@ -122,12 +122,18 @@ export async function getRoundDetail(
   };
 }
 
-async function getViewerStake(
+/**
+ * The viewer's own conformance stake on a round, or null.
+ *
+ * Exported because the market board's draft pricing needs the same row (it is
+ * priced as a *replacement*, since `place_stake` upserts one stake per account
+ * per round) and the two callers must not disagree about what the viewer holds.
+ */
+export async function getViewerStake(
   roundId: string,
   viewerId: string,
   supabase: SupabaseClient,
-): Promise<RoundDetail["viewerStake"]> {
-  const { data, error } = await supabase
+): Promise<RoundDetail["viewerStake"]> {  const { data, error } = await supabase
     .from("predictions")
     .select("model_id, stake_points")
     .eq("round_id", roundId)

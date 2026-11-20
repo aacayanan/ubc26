@@ -303,6 +303,64 @@ select.field {
   padding-right: 2.4rem;
 }
 
+/* Stake amount: a 3px instrument track, matching the meter, driven by thumb
+   position. The filled portion is a magenta-to-violet run so the control reads
+   as part of the same measuring family as the pool. */
+.stake-range {
+  --fill: 25%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.stake-range::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--magenta-deep), var(--magenta) 62%, var(--violet))
+      no-repeat 0 0 / var(--fill) 100%,
+    rgb(255 255 255 / 0.1);
+}
+.stake-range::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+}
+.stake-range::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--magenta-deep), var(--magenta));
+}
+.stake-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border-radius: 999px;
+  background: var(--ink);
+  box-shadow: 0 0 0 1px rgb(5 4 10 / 0.9);
+  transition: transform 160ms var(--ease-out);
+}
+.stake-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgb(5 4 10 / 0.9);
+  border-radius: 999px;
+  background: var(--ink);
+}
+.stake-range:hover::-webkit-slider-thumb,
+.stake-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.stake-range:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
 .link {
   color: var(--muted);
   text-underline-offset: 4px;
@@ -399,6 +457,49 @@ select.field {
     var(--magenta) 62%,
     var(--violet)
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Market board
+ *
+ * The pool as an instrument. A quiet market is not a dead one: the "now"
+ * marker breathes on the same slow tide as the status dot, and the bands
+ * settle into it rather than freezing. Under reduced motion every piece of
+ * this resolves to a still frame — the numbers and the bands carry the
+ * state on their own.
+ * ------------------------------------------------------------------ */
+
+.now-line {
+  animation: now-breathe 3.2s var(--ease-out) infinite;
+}
+.now-line-active {
+  animation-duration: 1.9s;
+}
+
+@keyframes now-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* A quiet market still reads as an instrument: the trace breathes at the same
+   slow tide as the status dot, unless the visitor asked motion to stop. */
+.price-trace {
+  animation: trace-breathe 5.5s var(--ease-out) infinite;
+}
+
+@keyframes trace-breathe {
+  0%,
+  100% {
+    opacity: 0.86;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ------------------------------------------------------------------ *

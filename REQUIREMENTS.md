@@ -293,7 +293,20 @@ categories).
   F26's `/predictions` history is the natural source for (a)–(b): its per-stake
   `state` already separates settled wins from losses.
 - F25. Historical model performance across rounds (conformance rate, crowd
-  win rate).
+  win rate). **Done (2026-11-20)** — `/models` reads `GET /api/models/analytics`,
+  backed by the `model_round_analytics` view (migration `20261119001200`) keyed
+  off `round_models`, so a model seated in a round that failed before settlement
+  is **labeled** (`unsettled`/`voided`) rather than silently omitted. Only
+  comparable rounds count: JavaScript (post-pivot) briefs that reached a decided
+  status; retired Python challenges are excluded. Conformance and crowd stay
+  separate records — conformance rate is over the rounds actually judged (a
+  forfeit or an `unavailable` judge is not a non-conformance), crowd win rate is
+  over every settled round. The rate arithmetic is a pure, tested aggregate in
+  `lib/server/services/models/analytics.ts`; `round_history_gaps` lists the
+  non-settled comparable rounds with their reason. SQL assertions in
+  `supabase/tests/f25_model_analytics.sql`. **Speed and code-length trends are
+  deliberately not built** — those categories were retired by the pivot
+  (CLAUDE.md forbids their return).
 - F26. User prediction history (stake vs outcome). **Done (2026-11-20)** —
   `/predictions` lists the signed-in account's conformance stakes via
   `GET /api/stakes` (scoped by `requireUser()`, no user-id parameter) and
