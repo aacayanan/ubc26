@@ -98,7 +98,10 @@ export function roundLabel(state: string): string {
     case "RUNNING":
       return "Rendering";
     case "EVALUATING":
-      return "Judging";
+      // The pipeline produces verdicts and stops here; settlement is a separate
+      // step (F18). Labelling this "Judging" made a finished round look busy when
+      // it was only waiting to settle. The judge has already ruled by this state.
+      return "Awaiting settlement";
     case "SETTLED":
       return "Settled";
     case "VOIDED":
