@@ -1,6 +1,31 @@
 # AI Showdown — Requirements & Build Order
 
-Last updated: 2026-11-19. Source: project spec + decisions confirmed with the team.
+Last updated: 2026-11-20. Source: project spec + decisions confirmed with the team.
+
+## Pivot notice (2026-11-20): SOL-backed live wagering, Devnet only
+
+The team replaced the points-only, bet-before-anything-runs mechanic with
+**SOL-backed live parimutuel wagering on Solana Devnet** (valueless test SOL):
+
+- a mandatory **$5-equivalent ante** before the ante deadline (the user's first
+  wager and the ticket to live betting);
+- **multiple live wagers** while the models generate, with estimated payout
+  multipliers that move with accepted wagers;
+- betting **closes when the first model reaches 75% of its output-token
+  budget**, or earlier if a model finishes or fails;
+- **automatic Devnet SOL payouts** to winners after judging, net of a disclosed
+  platform fee (default 5%, winning rounds only); dead heat for tied winners;
+  full refunds for void rounds or unbacked winners.
+
+Transport: one atomic transaction per wager (System transfer + Memo
+commitment), user-signed, operator co-signed and broadcast, trusted backend
+operator for custody and payouts. Mainnet and real-value wagering remain
+**blocked pending legal and security review**. Full design and the trust
+boundary: [`docs/solana-integration.md`](docs/solana-integration.md).
+
+The rules below that conflict with this (non-negotiable #1, "The two clocks")
+are revised in place and marked _(revised 2026-11-20)_. Original issue
+acceptance criteria written for points are superseded where they conflict.
 
 ## Pivot notice (2026-11-19)
 
@@ -51,7 +76,22 @@ free point. The two clocks below are the rule that makes this coherent.
 | Frontend stack          | Next.js (TypeScript) + Tailwind                                                                                                                                                                                                                                              | **Locked** |
 | App packaging           | Production Dockerfile at repo root (Next.js standalone output); deploy host still open                                                                                                                                                                                       | **Locked** |
 
-## The two clocks (non-negotiable)
+## The three windows (revised 2026-11-20)
+
+Applies to SOL rounds (`wagering_mode = 'devnet_sol'`); points rounds keep the
+two clocks below.
+
+1. **Ante** — `OPEN` until `prediction_deadline` (the ante deadline). No code
+   or render exists.
+2. **Live** — during generation. Partial code and preview renders are visible;
+   eligible users keep wagering. Betting closes **before** any output past the
+   first model's 75% token mark, any finished or failed model, any final render,
+   gate result or judge verdict becomes visible. Enforced in the pipeline
+   ("close, then publish") and in the database.
+3. **Resolution** — final render, gate, judge, crowd vote and settlement, only
+   after betting has closed. The crowd vote never moves SOL.
+
+## The two clocks (points rounds)
 
 This is what keeps prediction meaningful.
 
@@ -79,8 +119,10 @@ stakes are rejected. Earmarked follow-up — not in the hackathon slice.
 
 ## Non-Negotiable Constraints
 
-1. No real-money wagering, deposits, or payouts. Stake points only; the pool
-   is a points redistribution, not a market.
+1. _(revised 2026-11-20)_ Wagers are SOL-denominated **on Solana Devnet only,
+   with valueless test SOL**. Mainnet transfers and any real-money wagering,
+   deposits or payouts are blocked until a documented legal review and an
+   independent security review are complete.
 2. LLM-generated code never executes on the application server — only inside
    the sandbox.
 3. API credentials (OpenRouter, Supabase service role, etc.) remain server-side.

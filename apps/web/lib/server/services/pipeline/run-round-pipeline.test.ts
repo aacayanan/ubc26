@@ -59,6 +59,18 @@ vi.mock("@/lib/server/services/evaluation/persist", () => ({
   upsertExecution: deps.upsertExecution,
   markExecutionStatus: vi.fn(),
 }));
+// Points-round behaviour: the SOL betting meter is inert here; its own rules
+// are covered in wagering/betting.test.ts.
+vi.mock("@/lib/server/services/wagering/betting", () => ({
+  BettingMeter: {
+    forRound: async () => ({
+      active: false,
+      close: async () => undefined,
+      checkStall: async () => false,
+      beforeReveal: async () => undefined,
+    }),
+  },
+}));
 vi.mock("@/lib/server/services/evaluation/chunk-policy", () => ({
   getChunkPolicy: deps.getChunkPolicy,
   chunkParams: (config: Record<string, unknown>, policy: ChunkPolicy) => ({

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CountdownReadout } from "@/components/countdown";
+import { SolRound } from "@/components/sol-round";
 import { describeDeadline } from "@/lib/countdown";
 import {
   CrosshairMark,
@@ -74,6 +75,23 @@ export default function CompetitionDetailPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    return () => {
+      active = false;
+    };
+  }, [roundId, reloadKey]);
+
+  // SOL rounds (Devnet prototype) render the wagering view instead of the
+  // points stake form. Read from the pool endpoint, which every round has.
+  const [solMode, setSolMode] = useState(false);
+  useEffect(() => {
+    if (!roundId) return;
+    let active = true;
+    fetch(`/api/rounds/${roundId}/pool`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (active) setSolMode(body?.pool?.wageringMode === "devnet_sol");
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -242,193 +260,205 @@ export default function CompetitionDetailPage() {
             </div>
           </Panel>
 
-          <Panel className="p-7">
-            <div className="flex items-center justify-between">
-              <h2 className="t-title text-[1rem] text-ink">The pool</h2>
-              <span className="t-num text-[0.8125rem] text-muted">
-                {round.pool_points.toLocaleString()} pts
-              </span>
-            </div>
-            <Meter
-              value={poolUsed}
-              className="mt-4"
-              label={`Pool is ${Math.round(poolUsed * 100)} percent of capacity`}
-            />
-            <p className="t-body mt-3 text-xs text-faint">
-              Points, not money. The pot is split pro-rata among the backers of
-              the model that conforms to the brief.
-            </p>
-          </Panel>
-        </div>
-
-        {/* Stake panel */}
-        <Panel className="p-7 lg:sticky lg:top-24">
-          {isOpen && !staked ? (
-            <form onSubmit={handleSubmit}>
+          {solMode ? null : (
+            <Panel className="p-7">
               <div className="flex items-center justify-between">
-                <h2 className="t-title text-[1rem] text-ink">
-                  Stake on a model
-                </h2>
-                <span className="t-mono text-[0.625rem] text-faint">
-                  before deadline
+                <h2 className="t-title text-[1rem] text-ink">The pool</h2>
+                <span className="t-num text-[0.8125rem] text-muted">
+                  {round.pool_points.toLocaleString()} pts
                 </span>
               </div>
+              <Meter
+                value={poolUsed}
+                className="mt-4"
+                label={`Pool is ${Math.round(poolUsed * 100)} percent of capacity`}
+              />
+              <p className="t-body mt-3 text-xs text-faint">
+                Points, not money. The pot is split pro-rata among the backers
+                of the model that conforms to the brief.
+              </p>
+            </Panel>
+          )}
+        </div>
 
-              <fieldset className="mt-5">
-                <legend className="t-label text-[0.5625rem] text-faint">
-                  Which model conforms?
-                </legend>
-                <div className="mt-2.5 space-y-2">
-                  {round.models.map((m) => {
-                    const active = selected === m.id;
-                    return (
-                      <label
-                        key={m.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-violet ${
-                          active
-                            ? "border-magenta bg-magenta/[0.07]"
-                            : "border-[var(--control-line)] bg-white/[0.015] hover:border-white/45"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="model"
-                          value={m.id}
-                          checked={active}
-                          onChange={() => setSelected(m.id)}
-                          className="sr-only"
-                        />
-                        {/* filled vs hollow ring: selection never relies on colour */}
-                        <span
-                          aria-hidden="true"
-                          className={`grid size-[15px] shrink-0 place-items-center rounded-full border ${
-                            active ? "border-magenta" : "border-white/40"
-                          }`}
-                        >
-                          <span
-                            className={`size-[7px] rounded-full ${
-                              active ? "bg-magenta" : "bg-transparent"
-                            }`}
-                          />
-                        </span>
-                        <span className="text-[0.875rem] text-ink">
-                          {m.name}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              <div className="mt-5">
-                <label
-                  htmlFor="stake"
-                  className="t-label block text-[0.5625rem] text-faint"
-                >
-                  Stake
-                </label>
-                <div className="mt-2.5 flex items-center gap-2">
-                  <input
-                    id="stake"
-                    type="number"
-                    min={10}
-                    step={10}
-                    value={stake}
-                    onChange={(e) => setStake(e.target.value)}
-                    aria-describedby="stake-hint"
-                    className="field t-num"
-                  />
-                  <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
-                    pts
+        {solMode ? (
+          <SolRound
+            roundId={round.id}
+            status={round.state}
+            deadline={round.deadline}
+            models={round.models}
+          />
+        ) : (
+          /* Stake panel */
+          <Panel className="p-7 lg:sticky lg:top-24">
+            {isOpen && !staked ? (
+              <form onSubmit={handleSubmit}>
+                <div className="flex items-center justify-between">
+                  <h2 className="t-title text-[1rem] text-ink">
+                    Stake on a model
+                  </h2>
+                  <span className="t-mono text-[0.625rem] text-faint">
+                    before deadline
                   </span>
                 </div>
-                <p
-                  id="stake-hint"
-                  className="t-mono mt-2 text-[0.625rem] text-faint"
+
+                <fieldset className="mt-5">
+                  <legend className="t-label text-[0.5625rem] text-faint">
+                    Which model conforms?
+                  </legend>
+                  <div className="mt-2.5 space-y-2">
+                    {round.models.map((m) => {
+                      const active = selected === m.id;
+                      return (
+                        <label
+                          key={m.id}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-violet ${
+                            active
+                              ? "border-magenta bg-magenta/[0.07]"
+                              : "border-[var(--control-line)] bg-white/[0.015] hover:border-white/45"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="model"
+                            value={m.id}
+                            checked={active}
+                            onChange={() => setSelected(m.id)}
+                            className="sr-only"
+                          />
+                          {/* filled vs hollow ring: selection never relies on colour */}
+                          <span
+                            aria-hidden="true"
+                            className={`grid size-[15px] shrink-0 place-items-center rounded-full border ${
+                              active ? "border-magenta" : "border-white/40"
+                            }`}
+                          >
+                            <span
+                              className={`size-[7px] rounded-full ${
+                                active ? "bg-magenta" : "bg-transparent"
+                              }`}
+                            />
+                          </span>
+                          <span className="text-[0.875rem] text-ink">
+                            {m.name}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <div className="mt-5">
+                  <label
+                    htmlFor="stake"
+                    className="t-label block text-[0.5625rem] text-faint"
+                  >
+                    Stake
+                  </label>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      id="stake"
+                      type="number"
+                      min={10}
+                      step={10}
+                      value={stake}
+                      onChange={(e) => setStake(e.target.value)}
+                      aria-describedby="stake-hint"
+                      className="field t-num"
+                    />
+                    <span className="t-mono shrink-0 text-[0.6875rem] text-faint">
+                      pts
+                    </span>
+                  </div>
+                  <p
+                    id="stake-hint"
+                    className="t-mono mt-2 text-[0.625rem] text-faint"
+                  >
+                    minimum 10 points · one stake per round
+                  </p>
+                </div>
+
+                {error ? (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3 py-2 text-xs text-magenta"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={saving || !selected || Number(stake) < 10}
+                  className="btn btn-solid btn-block mt-6"
                 >
-                  minimum 10 points · one stake per round
+                  {saving ? "Sealing…" : "Seal this stake"}
+                </button>
+
+                <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
+                  committed on devnet as hash(pick, stake, nonce)
                 </p>
+              </form>
+            ) : staked ? (
+              <div className="text-center">
+                <Status tone="ink">Sealed</Status>
+                <p className="t-title mt-5 text-lg text-ink">
+                  Your stake is in the pool.
+                </p>
+                <p className="t-body mt-2 text-sm text-muted">
+                  It is locked for this round, and settles with the pool once
+                  the round settles.
+                </p>
+                <Link
+                  href="/predictions"
+                  className="btn btn-ghost btn-block mt-6"
+                >
+                  My predictions
+                </Link>
               </div>
-
-              {error ? (
-                <p
-                  role="alert"
-                  className="mt-4 rounded-lg border border-magenta/30 bg-magenta/[0.07] px-3 py-2 text-xs text-magenta"
+            ) : (
+              <div className="text-center">
+                <Status
+                  tone={
+                    round.state === "VOIDED"
+                      ? "amber"
+                      : round.state === "SETTLED" || round.state === "ARCHIVED"
+                        ? "ink"
+                        : "violet"
+                  }
                 >
-                  {error}
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={saving || !selected || Number(stake) < 10}
-                className="btn btn-solid btn-block mt-6"
-              >
-                {saving ? "Sealing…" : "Seal this stake"}
-              </button>
-
-              <p className="t-mono mt-3 text-center text-[0.625rem] leading-relaxed text-faint">
-                committed on devnet as hash(pick, stake, nonce)
-              </p>
-            </form>
-          ) : staked ? (
-            <div className="text-center">
-              <Status tone="ink">Sealed</Status>
-              <p className="t-title mt-5 text-lg text-ink">
-                Your stake is in the pool.
-              </p>
-              <p className="t-body mt-2 text-sm text-muted">
-                It is locked for this round, and settles with the pool once the
-                round settles.
-              </p>
-              <Link
-                href="/predictions"
-                className="btn btn-ghost btn-block mt-6"
-              >
-                My predictions
-              </Link>
-            </div>
-          ) : (
-            <div className="text-center">
-              <Status
-                tone={
-                  round.state === "VOIDED"
-                    ? "amber"
-                    : round.state === "SETTLED" || round.state === "ARCHIVED"
-                      ? "ink"
-                      : "violet"
-                }
-              >
-                {roundLabel(round.state)}
-              </Status>
-              <p className="t-title mt-5 text-lg text-ink">
-                {round.state === "SETTLED" || round.state === "ARCHIVED"
-                  ? "This round has settled."
-                  : round.state === "VOIDED"
-                    ? "This round was void."
-                    : round.state === "CANCELLED" || round.state === "FAILED"
-                      ? "This round did not run."
-                      : "Staking is closed."}
-              </p>
-              <p className="t-body mt-2 text-sm text-muted">
-                {round.state === "EVALUATING"
-                  ? "Renders are in and the judge is ruling on conformance."
-                  : round.state === "SETTLED" || round.state === "ARCHIVED"
-                    ? "Its conformance result and the crowd's choice are recorded in Results."
+                  {roundLabel(round.state)}
+                </Status>
+                <p className="t-title mt-5 text-lg text-ink">
+                  {round.state === "SETTLED" || round.state === "ARCHIVED"
+                    ? "This round has settled."
                     : round.state === "VOIDED"
-                      ? "No model conformed to the brief, so no points moved. Every stake was returned."
+                      ? "This round was void."
                       : round.state === "CANCELLED" || round.state === "FAILED"
-                        ? "No render ran, so every stake is void and its points return to the pool."
-                        : round.state === "RETRYING"
-                          ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
-                          : "The round has locked. Renders are being produced, and the crowd vote opens once they land."}
-              </p>
-              <Link href="/results" className="btn btn-ghost btn-block mt-6">
-                Results
-              </Link>
-            </div>
-          )}
-        </Panel>
+                        ? "This round did not run."
+                        : "Staking is closed."}
+                </p>
+                <p className="t-body mt-2 text-sm text-muted">
+                  {round.state === "EVALUATING"
+                    ? "Renders are in and the judge is ruling on conformance."
+                    : round.state === "SETTLED" || round.state === "ARCHIVED"
+                      ? "Its conformance result and the crowd's choice are recorded in Results."
+                      : round.state === "VOIDED"
+                        ? "No model conformed to the brief, so no points moved. Every stake was returned."
+                        : round.state === "CANCELLED" ||
+                            round.state === "FAILED"
+                          ? "No render ran, so every stake is void and its points return to the pool."
+                          : round.state === "RETRYING"
+                            ? "A render or judge could not be reached, and the round is being retried rather than settled on a guess."
+                            : "The round has locked. Renders are being produced, and the crowd vote opens once they land."}
+                </p>
+                <Link href="/results" className="btn btn-ghost btn-block mt-6">
+                  Results
+                </Link>
+              </div>
+            )}
+          </Panel>
+        )}
       </div>
     </div>
   );
