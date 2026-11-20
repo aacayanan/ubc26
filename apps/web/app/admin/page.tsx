@@ -37,8 +37,9 @@ export default async function AdminPage() {
       .order("title"),
     supabase
       .from("llm_models")
-      .select("id, name")
+      .select("id, name, tier, model_tiers(label, ante_usd_cents)")
       .eq("is_active", true)
+      .eq("role", "competitor")
       .order("sort_order"),
     supabase
       .from("rounds")
@@ -75,10 +76,21 @@ export default async function AdminPage() {
     id: challenge.id,
     name: challenge.title,
   }));
-  const modelOptions = (models ?? []).map((model) => ({
-    id: model.id,
-    name: model.name,
-  }));
+  const modelOptions = (models ?? []).map((model) => {
+    const tierRecord = Array.isArray(model.model_tiers)
+      ? model.model_tiers[0]
+      : model.model_tiers;
+    return {
+      id: model.id,
+      name: model.name,
+      tier: (model.tier as string | null) ?? null,
+      tierLabel: tierRecord?.label ?? null,
+      anteUsdCents:
+        tierRecord?.ante_usd_cents === undefined
+          ? null
+          : Number(tierRecord.ante_usd_cents),
+    };
+  });
 
   return (
     <div className="shell py-12 sm:py-14">

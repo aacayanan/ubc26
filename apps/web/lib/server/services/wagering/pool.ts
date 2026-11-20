@@ -24,6 +24,10 @@ export interface PoolView {
   bettingCloseModelId: string | null;
   feeBps: number;
   anteUsdCents: number;
+  /** The ladder step this round was opened at; null for a legacy round. */
+  tier: string | null;
+  /** The tier's display name ("Frontier"), or null with `tier`. */
+  tierLabel: string | null;
   cutoffBps: number;
   tokenBudgetPerModel: number | null;
   treasuryAddress: string | null;
@@ -90,12 +94,20 @@ export async function getPoolView(
   const { data: round, error } = await supabase
     .from("rounds")
     .select(
-      "id, wagering_mode, betting_phase, betting_closed_at, betting_close_reason, betting_close_model_id, fee_bps, ante_usd_cents, cutoff_bps, token_budget_per_model, treasury_address, pool_locked_at, final_pool, sol_settlement",
+      "id, wagering_mode, betting_phase, betting_closed_at, betting_close_reason, betting_close_model_id, fee_bps, ante_usd_cents, tier, model_tiers(label), cutoff_bps, token_budget_per_model, treasury_address, pool_locked_at, final_pool, sol_settlement",
     )
     .eq("id", roundId)
     .maybeSingle();
   if (error) throw new InternalError("Failed to read the round pool", error);
   if (!round) throw new NotFoundError("Round not found");
+
+  // The embedded `model_tiers` is an object for a to-one join; tolerate the
+  // array shape some generated types use.
+  const tierEmbed = round.model_tiers as
+    { label: string } | Array<{ label: string }> | null;
+  const tierLabel = Array.isArray(tierEmbed)
+    ? (tierEmbed[0]?.label ?? null)
+    : (tierEmbed?.label ?? null);
 
   const { data: models } = await supabase
     .from("round_models")
@@ -162,6 +174,8 @@ export async function getPoolView(
       (round.betting_close_model_id as string | null) ?? null,
     feeBps: Number(round.fee_bps),
     anteUsdCents: Number(round.ante_usd_cents),
+    tier: (round.tier as string | null) ?? null,
+    tierLabel,
     cutoffBps: Number(round.cutoff_bps),
     tokenBudgetPerModel:
       round.token_budget_per_model === null

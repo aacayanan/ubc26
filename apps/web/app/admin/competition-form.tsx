@@ -2,16 +2,29 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Status } from "@/components/ui";
+import { Status, cx } from "@/components/ui";
 
 interface CatalogOption {
   id: string;
   name: string;
 }
 
+/** A model row: its name, plus the tier that prices the round it joins. */
+interface ModelOption extends CatalogOption {
+  /** The ladder rung this model competes at; null for an unseated model. */
+  tier: string | null;
+  tierLabel: string | null;
+  /** The round buy-in for that rung, in USD cents. */
+  anteUsdCents: number | null;
+}
+
 interface CompetitionFormProps {
   challenges: CatalogOption[];
-  models: CatalogOption[];
+  models: ModelOption[];
+}
+
+function usd(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
@@ -33,6 +46,22 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
         : [...current, modelId],
     );
   }
+
+  // The round's tier is not chosen directly: it is whatever rung the selected
+  // models share. Selecting across rungs is refused here, before a request,
+  // because `create_sol_competition` refuses it too — this is the same rule
+  // stated earlier, not a second rule.
+  const selectedModels = models.filter((model) => modelIds.includes(model.id));
+  const selectedTiers = [
+    ...new Set(selectedModels.map((model) => model.tier).filter(Boolean)),
+  ] as string[];
+  const mixedTiers = selectedTiers.length > 1;
+  const roundTier = selectedTiers.length === 1 ? selectedTiers[0] : null;
+  const roundAnte =
+    roundTier === null
+      ? null
+      : (selectedModels.find((model) => model.tier === roundTier)
+          ?.anteUsdCents ?? null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,6 +95,20 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
       setSubmitting(false);
       return;
     }
+    if (selectedModels.some((model) => model.tier === null)) {
+      setError(
+        "Every participating model must belong to a tier. Unseated models cannot be priced.",
+      );
+      setSubmitting(false);
+      return;
+    }
+    if (mixedTiers) {
+      setError(
+        "Choose models from a single tier. A round is priced by its tier, and mixing tiers makes the buy-in ambiguous.",
+      );
+      setSubmitting(false);
+      return;
+    }
     if (!deadline) {
       setError("Select a betting deadline.");
       setSubmitting(false);
@@ -90,6 +133,7 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
           // Every round is a Devnet SOL round (valueless test SOL).
           wageringMode: "devnet_sol",
           feeBps: Math.round(Number(feePercent) * 100),
+          tier: roundTier,
           stallTimeoutSeconds:
             stallSeconds.trim() === "" ? null : Number(stallSeconds),
         }),
@@ -173,23 +217,48 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
           Participating AI models
         </legend>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {models.map((model) => (
-            <label
-              key={model.id}
-              className="flex cursor-pointer items-center gap-3 rounded-[12px] border border-hairline bg-white/[0.018] px-3.5 py-3 text-sm text-ink"
-            >
-              <input
-                type="checkbox"
-                checked={modelIds.includes(model.id)}
-                onChange={() => toggleModel(model.id)}
-                className="size-4 accent-[var(--violet)]"
-              />
-              {model.name}
-            </label>
-          ))}
+          {models.map((model) => {
+            const picked = modelIds.includes(model.id);
+            // A model from another rung cannot join this round (the database
+            // refuses it), so it reads as disabled rather than as a choice that
+            // silently fails on submit.
+            const offTier =
+              roundTier !== null &&
+              model.tier !== null &&
+              model.tier !== roundTier;
+            return (
+              <label
+                key={model.id}
+                className={cx(
+                  "flex cursor-pointer items-center gap-3 rounded-[12px] border border-hairline bg-white/[0.018] px-3.5 py-3 text-sm text-ink",
+                  offTier && "cursor-not-allowed opacity-40",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={picked}
+                  disabled={offTier}
+                  onChange={() => toggleModel(model.id)}
+                  className="size-4 accent-[var(--violet)]"
+                />
+                <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                <span className="t-mono shrink-0 text-[0.625rem] text-faint">
+                  {model.anteUsdCents === null
+                    ? "no tier"
+                    : usd(model.anteUsdCents)}
+                </span>
+              </label>
+            );
+          })}
         </div>
         <p className="t-mono mt-2 text-[0.625rem] text-faint">
-          Choose 2–3 eligible active models. Selections must be unique.
+          {mixedTiers
+            ? "Those models are on different tiers. Pick from one tier."
+            : roundTier === null
+              ? "Choose 2–3 models; the tier they share sets the buy-in."
+              : `Round tier: ${models.find((m) => m.tier === roundTier)?.tierLabel ?? roundTier}${
+                  roundAnte === null ? "" : ` · ${usd(roundAnte)} buy-in`
+                }. Selections must be unique.`}
         </p>
       </fieldset>
 
@@ -239,9 +308,11 @@ export function CompetitionForm({ challenges, models }: CompetitionFormProps) {
           </label>
         </div>
         <p className="t-mono text-[0.625rem] text-faint">
-          The deadline above becomes the $5 ante deadline. Live betting runs
-          during generation and closes when the first model reaches 75% of its
-          output-token budget. Devnet test SOL only; it has no value.
+          The deadline above becomes the{" "}
+          {roundAnte === null ? "tier-priced" : usd(roundAnte)} ante deadline.
+          Live betting runs during generation and closes when the first model
+          reaches 75% of its output-token budget. Devnet test SOL only; it has
+          no value.
         </p>
       </fieldset>
 

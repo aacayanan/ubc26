@@ -79,8 +79,8 @@ async function main() {
   const { data: challenge } = await supabase
     .from("challenges").select("id").eq("status", "published").limit(1).single();
   const { data: models } = await supabase
-    .from("llm_models").select("id, name").eq("is_active", true).eq("role", "competitor").order("sort_order").limit(2);
-  check(challenge && models && models.length === 2, "a published brief and two active models exist");
+    .from("llm_models").select("id, name").eq("is_active", true).eq("role", "competitor").eq("tier", "cheap").order("sort_order").limit(2);
+  check(challenge && models && models.length === 2, "a published brief and two active cheap-tier models exist");
   const [modelA, modelB] = models!;
 
   const bettors: Array<{ keypair: Keypair; user: Awaited<ReturnType<typeof createBettor>> }> = [];
